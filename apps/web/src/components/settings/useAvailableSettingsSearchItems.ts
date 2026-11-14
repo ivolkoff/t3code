@@ -44,6 +44,9 @@ export function useAvailableSettingsSearchItems() {
     ) === true;
   const hasThreadAutoSettlement =
     getThreadAutoSettlementSearchAvailability(environments).eligibleEnvironmentIds.length > 0;
+  const hasThreadTagManagement = environments.some(
+    (environment) => environment.serverConfig?.environment.capabilities.threadTags === true,
+  );
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const canMaintain = useEnvironmentScope(primaryEnvironmentId, AuthEnvironmentMaintainScope);
   const hasPeerLinkHost = usePeerLinkHosts().length > 0;
@@ -72,6 +75,7 @@ export function useAvailableSettingsSearchItems() {
     hasThreadAutoSettlement,
     managedTunnelActive,
     hasPeerLinkHost,
+    hasThreadTagManagement,
     hasFastWorktreeCheckoutEnvironment,
     hasTextGeneratorsEnvironment,
     hasPrimaryEnvironment: primaryEnvironmentId !== null,

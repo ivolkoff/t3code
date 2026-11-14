@@ -120,6 +120,13 @@ const SETTINGS_SEARCH_TERMS = {
     msg("steer", { $context: "settings search keyword" }),
     msg("while the agent is running", { $context: "settings search keyword" }),
   ],
+  SettingsTags: [
+    msg("tags", { $context: "settings search keyword" }),
+    msg("rename tag", { $context: "settings search keyword" }),
+    msg("delete tag", { $context: "settings search keyword" }),
+    msg("labels", { $context: "settings search keyword" }),
+    msg("thread tags", { $context: "settings search keyword" }),
+  ],
   SettingsArchive: [
     msg("archive", { $context: "settings search keyword" }),
     msg("archived", { $context: "settings search keyword" }),

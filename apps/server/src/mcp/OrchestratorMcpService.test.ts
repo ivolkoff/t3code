@@ -5312,6 +5312,7 @@ describe("OrchestratorMcpService thread list", () => {
                 ...thread,
                 mayBeLive: isLiveSubagentShell(thread),
                 hasRemoteTasks: false,
+                tagged: false,
               })),
             ),
           getShellSnapshot: (options) => {
