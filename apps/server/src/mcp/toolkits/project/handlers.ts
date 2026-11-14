@@ -30,7 +30,13 @@ import { resolveRuntimeMode } from "../../delegatedTaskModes.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import * as OrchestrationMcp from "../../OrchestratorMcpService.ts";
-import { newCommandId, readCaller, resolveProjectId, unavailable } from "../../threadAccess.ts";
+import {
+  dispatchFailure,
+  newCommandId,
+  readCaller,
+  resolveProjectId,
+  unavailable,
+} from "../../threadAccess.ts";
 import { ProjectToolkit } from "./tools.ts";
 
 const isAboveCeilingError = Schema.is(OrchestratorRuntimeModeAboveCeilingError);
@@ -314,6 +320,17 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
           }),
         );
         const thread = result.projection.thread;
+        yield* Effect.forEach(input.tags ?? [], (tag, index) =>
+          context.threads
+            .dispatch({
+              type: "thread.tag.set",
+              commandId: CommandId.make(`${commandId}:tag:${index}`),
+              threadId: thread.id,
+              tag,
+              tagged: true,
+            })
+            .pipe(Effect.mapError(dispatchFailure)),
+        );
         const run = result.projection.runs.find((run) => run.userMessageId === messageId);
         return {
           threadId: thread.id,
