@@ -24,6 +24,7 @@ import {
 import { ChevronRightIcon, GripVerticalIcon, PinIcon } from "lucide-react";
 import { Fragment } from "react";
 
+import { useProjectPin } from "../../hooks/useProjectGroupUpdate";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useSidebarProjectGroups } from "../../hooks/useSidebarProjectGroups";
 import { cn } from "../../lib/utils";
@@ -34,6 +35,7 @@ import {
 import { useProjects } from "../../state/entities";
 import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { Button } from "../ui/button";
 import { ITEM_ROW_CLASSNAME } from "./itemRows";
 import { SettingsGroup } from "./SettingsGroup";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -46,6 +48,7 @@ export function ProjectOrderList() {
   const projects = useProjects();
   const groupingSettings = useClientSettings(selectProjectGroupingSettings);
   const reorderProjects = useUiStateStore((store) => store.reorderProjects);
+  const { canPinProjectGroup, toggleProjectGroupPin } = useProjectPin();
   const { selectScope } = useSettingsScope();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -82,7 +85,7 @@ export function ProjectOrderList() {
     <div className="space-y-3">
       <p className="px-3 text-sm text-muted-foreground sm:px-4">
         Choose a project to manage its name, icon, checkouts and actions. Drag projects to fix their
-        order in the sidebar.
+        order in the sidebar, or pin them to keep them on top.
       </p>
       <SettingsGroup>
         <DndContext
@@ -105,6 +108,8 @@ export function ProjectOrderList() {
                   <SortableProjectRow
                     group={group}
                     position={index + 1}
+                    canPin={canPinProjectGroup(group)}
+                    onTogglePin={() => toggleProjectGroupPin(group)}
                     onOpen={() =>
                       selectScope({
                         project: getSidebarProjectSettingsKey(group, groupingSettings, projects),
@@ -125,10 +130,14 @@ function SortableProjectRow({
   group,
   position,
   onOpen,
+  canPin,
+  onTogglePin,
 }: {
   readonly group: SidebarProjectSnapshot;
   readonly position: number;
   readonly onOpen: () => void;
+  readonly canPin: boolean;
+  readonly onTogglePin: () => void;
 }) {
   const {
     attributes,
@@ -179,12 +188,19 @@ function SortableProjectRow({
           </span>
         </span>
       </button>
-      {group.pinned ? (
-        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
-          <PinIcon aria-hidden className="size-3" />
-          Pinned
-        </span>
-      ) : null}
+      <span className={cn("flex shrink-0", !group.pinned && "opacity-50 hover:opacity-100")}>
+        <Button
+          size="icon-xs"
+          variant="ghost-muted"
+          aria-label={`${group.pinned ? "Unpin" : "Pin"} ${group.displayName}`}
+          aria-pressed={group.pinned}
+          title={group.pinned ? "Unpin project" : "Pin project"}
+          disabled={!canPin}
+          onClick={onTogglePin}
+        >
+          {group.pinned ? <PinIcon className="fill-current" /> : <PinIcon />}
+        </Button>
+      </span>
       <button
         type="button"
         tabIndex={-1}
