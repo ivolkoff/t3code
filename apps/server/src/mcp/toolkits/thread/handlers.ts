@@ -394,6 +394,21 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           command = { ...common, type: "thread.pin", ...(orderKey ? { orderKey } : {}) };
           break;
         }
+        case "tag":
+        case "untag":
+          if (input.tag === undefined) {
+            return yield* new OrchestratorMcpFailure({
+              code: "invalid_request",
+              message: `${input.action} requires tag.`,
+            });
+          }
+          command = {
+            ...common,
+            type: "thread.tag.set",
+            tag: input.tag,
+            tagged: input.action === "tag",
+          };
+          break;
         default:
           command = { ...common, type: `thread.${input.action}` };
       }

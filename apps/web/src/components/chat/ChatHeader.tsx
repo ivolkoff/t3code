@@ -22,6 +22,9 @@ import {
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Badge } from "../ui/badge";
 import { MiddleTruncate } from "../ui/middle-truncate";
+import { ThreadTagChips } from "../ThreadTagChips";
+import { useServerConfigs } from "../../state/entities";
+import { openThreadTagPicker } from "../../state/threadTagPicker";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
@@ -48,6 +51,7 @@ interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
+  activeThreadTags?: ReadonlyArray<string> | undefined;
   activeThreadLinkOrigin?: string | null | undefined;
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
@@ -73,6 +77,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
+  activeThreadTags,
   activeThreadLinkOrigin,
   isServerThread,
   activeProject,
@@ -94,6 +99,10 @@ export const ChatHeader = memo(function ChatHeader({
     AuthOrchestrationOperateScope,
   );
   const canShareWithGuest = useAtomValue(canShareWithGuestAtom(activeThreadEnvironmentId));
+  const serverConfigs = useServerConfigs();
+  const canEditTags =
+    canOperateThread &&
+    serverConfigs.get(activeThreadEnvironmentId)?.environment.capabilities.threadTags === true;
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -353,6 +362,7 @@ export const ChatHeader = memo(function ChatHeader({
                     type="button"
                     aria-label={`Thread actions for ${activeThreadTitle}`}
                     aria-haspopup="menu"
+                    data-thread-tag-title
                     onClick={openMenuFromTitle}
                     onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
                     className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -377,6 +387,7 @@ export const ChatHeader = memo(function ChatHeader({
                   <h2
                     aria-label={activeThreadTitle}
                     className="min-w-0 flex-1"
+                    data-thread-tag-title
                     dir={textDirection(activeThreadTitle)}
                   />
                 }
@@ -386,6 +397,21 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {renamingTitle === null ? (
+            canEditTags && (activeThreadTags?.length ?? 0) > 0 ? (
+              <button
+                type="button"
+                aria-label={`Edit tags: ${activeThreadTags?.join(", ")}`}
+                data-thread-tag-chips
+                className="flex min-w-0 shrink cursor-pointer rounded-sm p-0.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                onClick={(event) => openThreadTagPicker(activeThreadRef, event.currentTarget)}
+              >
+                <ThreadTagChips tags={activeThreadTags} />
+              </button>
+            ) : (
+              <ThreadTagChips tags={activeThreadTags} />
+            )
+          ) : null}
           {renamingTitle === null && activeThreadLinkOrigin ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="info" size="sm" />}>

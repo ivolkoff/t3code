@@ -37,8 +37,8 @@ import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
-import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import * as LegacyV1ThreadImporter from "./legacy/LegacyV1ThreadImporter.ts";
+import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import {
   ThreadWorktreeRestore,
   WorktreeRecreateError,
@@ -1076,4 +1076,58 @@ it.effect(
         expect(yield* Queue.size(started)).toBe(0);
       }).pipe(Effect.provide(layerTest));
     }),
+);
+
+it.effect.each([
+  { name: "delete fails on the first thread", to: null, failAt: "a", threadsChanged: 0 },
+  { name: "delete fails on the second thread", to: null, failAt: "b", threadsChanged: 1 },
+  { name: "rename fails on the third thread", to: "defect", failAt: "c", threadsChanged: 2 },
+])(
+  "a failed tag change reports how many threads already changed ($name)",
+  ({ to, failAt, threadsChanged }) => {
+    const layerTest = ThreadManagementService.layerWithLegacyImporter.pipe(
+      Layer.provide(Layer.succeed(ThreadWorktreeRestore, { restore: () => Effect.die("unused") })),
+      // Tags never need a migrated transcript, so one that cannot import does not stop the loop.
+      Layer.provide(
+        Layer.mock(LegacyV1ThreadImporter.LegacyV1ThreadImporter)({
+          ensureTranscript: (threadId) =>
+            Effect.fail(
+              new LegacyV1ThreadImporter.LegacyV1ThreadImportError({
+                operation: "ensureTranscript",
+                threadId,
+              }),
+            ),
+        }),
+      ),
+      Layer.provide(Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({})),
+      Layer.provide(
+        Layer.mock(Orchestrator.OrchestratorV2)({
+          listTaggedThreads: () =>
+            Effect.succeed(
+              ["a", "b", "c"].map((id) => ({ threadId: ThreadId.make(id), tags: ["bug"] })),
+            ),
+          dispatch: (command) =>
+            command.type === "thread.tag.set" && command.threadId === failAt
+              ? Effect.fail(
+                  new Orchestrator.OrchestratorDispatchError({
+                    commandId: command.commandId,
+                    commandType: command.type,
+                  }),
+                )
+              : Effect.succeed({ sequence: 1, storedEvents: [] } as never),
+        }),
+      ),
+      Layer.provide(ServerSettings.layerTest({})),
+      Layer.provideMerge(layerReceiptsTest),
+    );
+    return Effect.gen(function* () {
+      const threads = yield* ThreadManagementService.ThreadManagementService;
+      const error = yield* Effect.flip(
+        to === null
+          ? threads.deleteThreadTag({ tag: "bug" })
+          : threads.renameThreadTag({ tag: "bug", to }),
+      );
+      expect(error).toMatchObject({ _tag: "OrchestrationV2ThreadTagChangeError", threadsChanged });
+    }).pipe(Effect.provide(layerTest));
+  },
 );
