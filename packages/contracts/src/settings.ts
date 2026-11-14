@@ -98,6 +98,12 @@ export type SidebarAutoSettleAfterDays = typeof SidebarAutoSettleAfterDays.Type;
 const DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS: SidebarAutoSettleAfterDays = 7;
 
 const UsagePercent = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
+export const PaceHoldTagThreshold = Schema.Struct({
+  tag: TrimmedNonEmptyString,
+  aheadPercent: UsagePercent,
+});
+export type PaceHoldTagThreshold = typeof PaceHoldTagThreshold.Type;
+const isPaceHoldTagThreshold = Schema.is(PaceHoldTagThreshold);
 
 export const MAX_SNOOZE_PRESET_MINUTES = 30 * 24 * 60;
 export const MAX_SNOOZE_PRESETS = 8;
@@ -1436,6 +1442,17 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   paceHoldResumeSlackPercent: UsagePercent.pipe(Schema.withDecodingDefault(Effect.succeed(5))),
+  /** Per-tag `paceHoldAheadPercent`; the strictest matching tag wins. Bad entries drop alone. */
+  paceHoldTagThresholds: Schema.Array(Schema.Unknown).pipe(
+    Schema.decodeTo(
+      Schema.Array(PaceHoldTagThreshold),
+      SchemaTransformation.transform<ReadonlyArray<PaceHoldTagThreshold>, ReadonlyArray<unknown>>({
+        decode: (values) => values.filter(isPaceHoldTagThreshold),
+        encode: (values) => values,
+      }),
+    ),
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   snoozePresets: SnoozePresetSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SNOOZE_PRESETS)),
   ),
@@ -1876,6 +1893,7 @@ export const ServerSettingsPatch = Schema.Struct({
   snoozeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   paceHoldAheadPercent: Schema.optionalKey(Schema.NullOr(UsagePercent)),
   paceHoldResumeSlackPercent: Schema.optionalKey(UsagePercent),
+  paceHoldTagThresholds: Schema.optionalKey(Schema.Array(PaceHoldTagThreshold)),
   snoozePresets: Schema.optionalKey(SnoozePresetSettings),
   hiddenThreadTags: Schema.optionalKey(Schema.Array(Schema.String)),
   hideTaggedThreads: Schema.optionalKey(Schema.Boolean),
