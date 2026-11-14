@@ -115,6 +115,7 @@ import {
   SettingsWorktreesRouteScreen,
   SettingsEnvironmentSourceControlRouteScreen,
 } from "./features/settings/SettingsServerControlsRouteScreen";
+import { SettingsTagsRouteScreen } from "./features/settings/SettingsTagsRouteScreen";
 import {
   SettingsScheduledTasksRouteScreen,
   SettingsScheduledTaskNewRouteScreen,
@@ -189,6 +190,7 @@ const ROUTE_TITLES: Readonly<Record<string, string>> = {
   SettingsProjectOverview: msg("Projects"),
   SettingsKeyboard: msg("Keyboard"),
   SettingsVoice: msg("Voice"),
+  SettingsTags: msg("Tags"),
   SettingsFollowUp: msg("Chat", { $context: "noun, settings page title" }),
   SettingsScheduledTasks: msg("Scheduled tasks"),
   SettingsScheduledTaskNew: msg("New scheduled task"),
@@ -357,6 +359,11 @@ const SETTINGS_SCREENS = {
   SettingsVoiceModels: createNativeStackScreen({
     screen: SettingsVoiceModelsRouteScreen,
     options: SEARCH_SHEET_ROUTE,
+  }),
+  SettingsTags: createNativeStackScreen({
+    screen: SettingsTagsRouteScreen,
+    linking: "settings/tags",
+    options: settingsPage(),
   }),
   SettingsFollowUp: createNativeStackScreen({
     screen: SettingsFollowUpRouteScreen,

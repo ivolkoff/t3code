@@ -58,6 +58,7 @@ export function useThreadListV2(input: {
   readonly activeReorderEnvironmentIds: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys: ReadonlySet<string>;
   readonly settledLimit: number;
+  readonly tagFilterActive: boolean;
   readonly now: string;
   readonly pendingOrder: LayoutInput["pendingOrder"];
   readonly shelfPreferencesLoaded: boolean;
@@ -128,8 +129,10 @@ export function useThreadListV2(input: {
   const olderSettledShelf = useOlderSettledShelf({
     scopes,
     expanded: input.settledShelfExpanded,
-    // A search lists only matches, so the shelf would page forever; loaded pages stay.
-    visibleCount: input.searchQuery.trim().length === 0 ? input.settledLimit : 0,
+    // A search or tag filter lists only matches, so the shelf would page forever; loaded pages stay.
+    // Shells carry every tagged thread, so a tag filter needs no pages.
+    visibleCount:
+      input.searchQuery.trim().length === 0 && !input.tagFilterActive ? input.settledLimit : 0,
   });
   const { isListed, unloadedCount } = olderSettledShelf;
   const layout = useMemo(
@@ -153,18 +156,20 @@ export function useThreadListV2(input: {
         snoozedShelfExpanded: input.snoozedShelfExpanded,
         settledShelfExpanded: input.settledShelfExpanded,
         selectedThreadKey: input.selectedThreadKey,
-        isListedSettled: isListed,
-        unloadedSettledCount: unloadedCount(
-          threads.filter(
-            (thread) =>
-              thread.archivedAt === null &&
-              scopes.some(
-                (scope) =>
-                  scope.environmentId === thread.environmentId &&
-                  (scope.projectIds === null || scope.projectIds.includes(thread.projectId)),
+        isListedSettled: input.tagFilterActive ? () => true : isListed,
+        unloadedSettledCount: input.tagFilterActive
+          ? 0
+          : unloadedCount(
+              threads.filter(
+                (thread) =>
+                  thread.archivedAt === null &&
+                  scopes.some(
+                    (scope) =>
+                      scope.environmentId === thread.environmentId &&
+                      (scope.projectIds === null || scope.projectIds.includes(thread.projectId)),
+                  ),
               ),
-          ),
-        ),
+            ),
       }),
     [
       input.pendingOrder,
@@ -177,6 +182,7 @@ export function useThreadListV2(input: {
       input.snoozeEnvironmentIds,
       input.queuedThreadKeys,
       input.settledLimit,
+      input.tagFilterActive,
       layoutTime,
       workingShelfEnabled,
       input.workingShelfExpanded,
@@ -200,6 +206,8 @@ export function useThreadListV2(input: {
             input.projectRefs.map((ref) => scopedProjectKey(ref.environmentId, ref.projectId)),
           );
     const searchQuery = input.searchQuery.trim().toLocaleLowerCase();
+    // Pending tasks have no tags yet, so no tag filter matches them.
+    if (input.tagFilterActive) return [];
     return input.pendingTasks.filter(
       (pendingTask) =>
         (input.environmentId === null || pendingTask.environmentId === input.environmentId) &&
@@ -209,7 +217,13 @@ export function useThreadListV2(input: {
           )) &&
         (searchQuery.length === 0 || pendingTask.title.toLocaleLowerCase().includes(searchQuery)),
     );
-  }, [input.projectRefs, input.searchQuery, input.pendingTasks, input.environmentId]);
+  }, [
+    input.projectRefs,
+    input.searchQuery,
+    input.pendingTasks,
+    input.environmentId,
+    input.tagFilterActive,
+  ]);
   const items = useMemo(
     () =>
       buildThreadListV2ListItems({

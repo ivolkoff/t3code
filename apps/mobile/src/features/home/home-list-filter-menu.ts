@@ -1,6 +1,7 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
+import { threadTagKey } from "@t3tools/contracts";
 
 import { msg } from "gt-react-native";
 
@@ -39,6 +40,9 @@ export function buildHomeListFilterMenuItems(
     readonly selectedProjectKey: string | null;
     readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
     readonly onProjectChange: (projectKey: string | null) => void;
+    readonly tags?: ReadonlyArray<string>;
+    readonly selectedTag?: string | null;
+    readonly onTagChange?: (tag: string | null) => void;
   },
   resolve: MessageResolver = m,
 ): AppBarMenuItem[] {
@@ -81,6 +85,28 @@ export function buildHomeListFilterMenuItems(
           title: project.label,
           selected: props.selectedProjectKey === project.key,
           onPress: () => props.onProjectChange(project.key),
+        })),
+      ],
+    });
+  }
+
+  const { tags = [], selectedTag = null, onTagChange } = props;
+  if (onTagChange && (tags.length > 0 || selectedTag !== null)) {
+    items.push({
+      id: "tag",
+      title: resolve(msg("Tag", { $context: "filter menu heading" })),
+      items: [
+        {
+          id: "all-tags",
+          title: resolve(msg("All tags")),
+          selected: selectedTag === null,
+          onPress: () => onTagChange(null),
+        },
+        ...tags.map((tag) => ({
+          id: `tag:${tag}`,
+          title: tag,
+          selected: selectedTag !== null && threadTagKey(selectedTag) === threadTagKey(tag),
+          onPress: () => onTagChange(tag),
         })),
       ],
     });
