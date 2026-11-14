@@ -5,6 +5,7 @@ import {
   backgroundActivitySharedPolicySettings,
   getChangedBrowserSettingLabels,
   hasChangedBackgroundActivitySettings,
+  paceHoldTagOptions,
 } from "./SettingsPanels.logic";
 
 describe("background activity settings restore", () => {
@@ -86,5 +87,16 @@ describe("getChangedBrowserSettingLabels", () => {
         browserCustomSearchUrl: "https://search.example/?q=%s",
       }),
     ).toEqual(["Search engine"]);
+  });
+});
+
+describe("paceHoldTagOptions", () => {
+  it("dedupes case-insensitively, puts special tags first and skips configured ones", () => {
+    expect(
+      paceHoldTagOptions(
+        [["Review", " infra "], undefined, ["review", "Critical"], ["Background", "docs"]],
+        [{ tag: "docs" }, { tag: "critical" }],
+      ),
+    ).toEqual(["background", "infra", "review"]);
   });
 });

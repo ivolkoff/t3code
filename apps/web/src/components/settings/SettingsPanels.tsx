@@ -81,6 +81,7 @@ import {
   usePrimaryEnvironmentId,
 } from "../../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
+import { useThreadShells } from "../../state/entities";
 import { Button } from "../ui/button";
 import { DraftInput } from "../ui/draft-input";
 import { Input } from "../ui/input";
@@ -94,6 +95,7 @@ import {
   getChangedTypographySettingLabels,
   hasChangedBackgroundActivitySettings,
   isProjectGroupingEnabled,
+  paceHoldTagOptions,
   projectGroupingModeFromToggle,
   readLastEnabledProjectGroupingMode,
   rememberEnabledProjectGroupingMode,
@@ -733,21 +735,13 @@ const PACE_HOLD_DEFAULT_AHEAD = 10;
 
 function PaceHoldTagThresholdsList({
   thresholds,
+  hiddenTags,
   onChange,
 }: {
   thresholds: ReadonlyArray<PaceHoldTagThreshold>;
+  hiddenTags: ReadonlyArray<string>;
   onChange: (thresholds: ReadonlyArray<PaceHoldTagThreshold>) => void;
 }) {
-  const [tag, setTag] = useState("");
-  const [aheadPercent, setAheadPercent] = useState(0);
-  const normalized = tag.trim().toLowerCase();
-  const canAdd =
-    normalized !== "" && !thresholds.some((entry) => entry.tag.toLowerCase() === normalized);
-  const add = () => {
-    if (!canAdd) return;
-    onChange([...thresholds, { tag: normalized, aheadPercent }]);
-    setTag("");
-  };
   return (
     <div className="flex flex-col gap-1.5 pt-3 pb-2">
       {thresholds.map((entry, index) => (
@@ -776,35 +770,71 @@ function PaceHoldTagThresholdsList({
           </Button>
         </div>
       ))}
-      <div className="flex items-center gap-2">
-        <Input
-          size="sm"
-          className="min-w-0 flex-1"
-          placeholder="Tag"
-          aria-label="Tag"
-          value={tag}
-          onChange={(event) => setTag(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") add();
-          }}
-        />
-        <IntegerSettingInput
-          value={aheadPercent}
-          min={0}
-          max={100}
-          ariaLabel="Points ahead of pace for the new tag"
-          onCommit={setAheadPercent}
-        />
-        <Button
-          variant="ghost-muted"
-          size="icon-sm"
-          aria-label="Add pace limit"
-          disabled={!canAdd}
-          onClick={add}
-        >
-          <PlusIcon />
-        </Button>
-      </div>
+      <PaceHoldTagAddLine
+        thresholds={thresholds}
+        hiddenTags={hiddenTags}
+        onAdd={(entry) => onChange([...thresholds, entry])}
+      />
+    </div>
+  );
+}
+
+// Reads thread shells here, not in the panel, so shell updates re-render only this line.
+function PaceHoldTagAddLine({
+  thresholds,
+  hiddenTags,
+  onAdd,
+}: {
+  thresholds: ReadonlyArray<PaceHoldTagThreshold>;
+  hiddenTags: ReadonlyArray<string>;
+  onAdd: (entry: PaceHoldTagThreshold) => void;
+}) {
+  const shells = useThreadShells();
+  const options = paceHoldTagOptions(
+    [...shells.map((shell) => shell.source.tags), hiddenTags],
+    thresholds,
+  );
+  const [tag, setTag] = useState<string | null>(null);
+  const [aheadPercent, setAheadPercent] = useState(0);
+  const selected = tag !== null && options.includes(tag) ? tag : null;
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        value={selected}
+        disabled={options.length === 0}
+        onValueChange={(value) => setTag(value)}
+      >
+        <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="Tag">
+          <SelectValue placeholder={options.length === 0 ? "No tags yet" : "Tag"} />
+        </SelectTrigger>
+        <SelectPopup align="start" alignItemWithTrigger={false}>
+          {options.map((option) => (
+            <SelectItem hideIndicator key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+      <IntegerSettingInput
+        value={aheadPercent}
+        min={0}
+        max={100}
+        ariaLabel="Points ahead of pace for the new tag"
+        onCommit={setAheadPercent}
+      />
+      <Button
+        variant="ghost-muted"
+        size="icon-sm"
+        aria-label="Add pace limit"
+        disabled={selected === null}
+        onClick={() => {
+          if (selected === null) return;
+          onAdd({ tag: selected, aheadPercent });
+          setTag(null);
+        }}
+      >
+        <PlusIcon />
+      </Button>
     </div>
   );
 }
@@ -1900,6 +1930,7 @@ export function ThreadsSettingsPanel() {
         >
           <PaceHoldTagThresholdsList
             thresholds={settings.paceHoldTagThresholds}
+            hiddenTags={settings.hiddenThreadTags}
             onChange={(paceHoldTagThresholds) => updateSettings({ paceHoldTagThresholds })}
           />
         </SettingsRow>

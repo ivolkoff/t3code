@@ -271,3 +271,21 @@ export function backgroundActivityOverrideSettings(
     },
   };
 }
+
+const PACE_HOLD_SPECIAL_TAGS = ["critical", "background"];
+
+/** Tags a pace limit can be added for: special tags first, then the rest alphabetically. */
+export function paceHoldTagOptions(
+  tagLists: ReadonlyArray<ReadonlyArray<string> | undefined>,
+  configured: ReadonlyArray<{ readonly tag: string }>,
+): ReadonlyArray<string> {
+  const taken = new Set(configured.map((entry) => entry.tag.trim().toLowerCase()));
+  const tags = new Set<string>();
+  for (const list of tagLists) {
+    for (const tag of list ?? []) {
+      const normalized = tag.trim().toLowerCase();
+      if (normalized !== "" && !PACE_HOLD_SPECIAL_TAGS.includes(normalized)) tags.add(normalized);
+    }
+  }
+  return [...PACE_HOLD_SPECIAL_TAGS, ...[...tags].toSorted()].filter((tag) => !taken.has(tag));
+}
