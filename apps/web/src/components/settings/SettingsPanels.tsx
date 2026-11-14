@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, PlusIcon, XIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import {
@@ -19,6 +19,7 @@ import {
   type DiffLayout,
   MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
   MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
+  type PaceHoldTagThreshold,
   type ResponseStreamingMode,
   type QuitConfirmationMode,
   SidebarProjectSortOrder,
@@ -509,7 +510,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Snooze until limits reset"]
       : []),
     ...(settings.paceHoldAheadPercent !== DEFAULT_UNIFIED_SETTINGS.paceHoldAheadPercent ||
-    settings.paceHoldResumeSlackPercent !== DEFAULT_UNIFIED_SETTINGS.paceHoldResumeSlackPercent
+    settings.paceHoldResumeSlackPercent !== DEFAULT_UNIFIED_SETTINGS.paceHoldResumeSlackPercent ||
+    settings.paceHoldTagThresholds.length > 0
       ? ["Pause background work ahead of pace"]
       : []),
     ...(!Equal.equals(settings.snoozePresets, DEFAULT_UNIFIED_SETTINGS.snoozePresets)
@@ -676,6 +678,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
       paceHoldAheadPercent: DEFAULT_UNIFIED_SETTINGS.paceHoldAheadPercent,
       paceHoldResumeSlackPercent: DEFAULT_UNIFIED_SETTINGS.paceHoldResumeSlackPercent,
+      paceHoldTagThresholds: DEFAULT_UNIFIED_SETTINGS.paceHoldTagThresholds,
       snoozePresets: DEFAULT_UNIFIED_SETTINGS.snoozePresets,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -726,6 +729,84 @@ export function useSettingsRestore(onRestored?: () => void) {
 
 const AUTO_SETTLE_DEFAULT_DAYS = DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays ?? 7;
 const PACE_HOLD_DEFAULT_AHEAD = 10;
+
+function PaceHoldTagThresholdsList({
+  thresholds,
+  onChange,
+}: {
+  thresholds: ReadonlyArray<PaceHoldTagThreshold>;
+  onChange: (thresholds: ReadonlyArray<PaceHoldTagThreshold>) => void;
+}) {
+  const [tag, setTag] = useState("");
+  const [aheadPercent, setAheadPercent] = useState(0);
+  const normalized = tag.trim().toLowerCase();
+  const canAdd =
+    normalized !== "" && !thresholds.some((entry) => entry.tag.toLowerCase() === normalized);
+  const add = () => {
+    if (!canAdd) return;
+    onChange([...thresholds, { tag: normalized, aheadPercent }]);
+    setTag("");
+  };
+  return (
+    <div className="flex flex-col gap-1.5 pt-3 pb-2">
+      {thresholds.map((entry, index) => (
+        <div key={entry.tag} className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm">{entry.tag}</span>
+          <IntegerSettingInput
+            value={entry.aheadPercent}
+            min={0}
+            max={100}
+            ariaLabel={`Points ahead of pace for ${entry.tag}`}
+            onCommit={(value) =>
+              onChange(
+                thresholds.map((candidate, at) =>
+                  at === index ? { ...candidate, aheadPercent: value } : candidate,
+                ),
+              )
+            }
+          />
+          <Button
+            variant="ghost-muted"
+            size="icon-sm"
+            aria-label={`Remove pace limit for ${entry.tag}`}
+            onClick={() => onChange(thresholds.filter((_, at) => at !== index))}
+          >
+            <XIcon />
+          </Button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <Input
+          size="sm"
+          className="min-w-0 flex-1"
+          placeholder="Tag"
+          aria-label="Tag"
+          value={tag}
+          onChange={(event) => setTag(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") add();
+          }}
+        />
+        <IntegerSettingInput
+          value={aheadPercent}
+          min={0}
+          max={100}
+          ariaLabel="Points ahead of pace for the new tag"
+          onCommit={setAheadPercent}
+        />
+        <Button
+          variant="ghost-muted"
+          size="icon-sm"
+          aria-label="Add pace limit"
+          disabled={!canAdd}
+          onClick={add}
+        >
+          <PlusIcon />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function IntegerSettingInput({
   value,
@@ -1759,7 +1840,7 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           {...searchableSetting("pace-hold")}
-          description="Hold agent and scheduled turns, and all turns in threads tagged background, while a usage window runs ahead of even pace. They start when pace catches up. Threads tagged critical always run."
+          description="Hold agent and scheduled turns, and all turns in threads tagged background, while a usage window runs ahead of even pace, until pace catches up. Threads tagged critical run unless given a tag limit."
           settingKeys={["paceHoldAheadPercent"]}
           control={
             <ScopedSwitch
@@ -1789,23 +1870,36 @@ export function ThreadsSettingsPanel() {
                 />
               }
             />
-            <SettingsRow
-              serverScoped
-              settingKeys={["paceHoldResumeSlackPercent"]}
-              title={searchableSetting("pace-hold-resume-slack").title}
-              description="Held turns start when usage is this many points ahead of pace."
-              control={
-                <IntegerSettingInput
-                  value={settings.paceHoldResumeSlackPercent}
-                  min={0}
-                  max={100}
-                  ariaLabel="Points ahead of pace when resuming"
-                  onCommit={(value) => updateSettings({ paceHoldResumeSlackPercent: value })}
-                />
-              }
-            />
           </>
         ) : null}
+        {settings.paceHoldAheadPercent !== null || settings.paceHoldTagThresholds.length > 0 ? (
+          <SettingsRow
+            serverScoped
+            settingKeys={["paceHoldResumeSlackPercent"]}
+            title={searchableSetting("pace-hold-resume-slack").title}
+            description="Held turns start when usage is this many points ahead of pace."
+            control={
+              <IntegerSettingInput
+                value={settings.paceHoldResumeSlackPercent}
+                min={0}
+                max={100}
+                ariaLabel="Points ahead of pace when resuming"
+                onCommit={(value) => updateSettings({ paceHoldResumeSlackPercent: value })}
+              />
+            }
+          />
+        ) : null}
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("pace-hold-tags")}
+          description="Non-user turns in threads with these tags pause at their own points ahead of pace, even with the switch off. The lowest matching tag wins."
+          settingKeys={["paceHoldTagThresholds"]}
+        >
+          <PaceHoldTagThresholdsList
+            thresholds={settings.paceHoldTagThresholds}
+            onChange={(paceHoldTagThresholds) => updateSettings({ paceHoldTagThresholds })}
+          />
+        </SettingsRow>
       </SettingsSection>
 
       {hasServerTargets ? (

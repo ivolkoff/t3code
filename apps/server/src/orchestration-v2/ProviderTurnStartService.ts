@@ -14,6 +14,7 @@ import {
   isCompactionCommandMessage,
   parseGoalCommand,
   RunId,
+  type ServerSettings as ServerSettingsValue,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -116,6 +117,24 @@ const PROMPT_REFUSAL_TAGS = [
 const refusedBeforePrompt = (error: unknown): boolean =>
   PROMPT_REFUSAL_TAGS.some((tag) => Predicate.isTagged(error, tag)) ||
   (Predicate.hasProperty(error, "cause") && refusedBeforePrompt(error.cause));
+
+// `critical` threads run unless `critical` itself has a threshold.
+const paceHoldAheadPercentFor = (
+  tags: ReadonlySet<string>,
+  settings: Pick<ServerSettingsValue, "paceHoldAheadPercent" | "paceHoldTagThresholds">,
+): number | null => {
+  const tagged = settings.paceHoldTagThresholds.filter((entry) =>
+    tags.has(entry.tag.trim().toLowerCase()),
+  );
+  if (
+    tags.has("critical") &&
+    !tagged.some((entry) => entry.tag.trim().toLowerCase() === "critical")
+  )
+    return null;
+  return tagged.length > 0
+    ? Math.min(...tagged.map((entry) => entry.aheadPercent))
+    : settings.paceHoldAheadPercent;
+};
 
 export interface ProviderTurnStartServiceV2Shape {
   readonly start: (input: {
@@ -550,14 +569,14 @@ export const layer: Layer.Layer<
       const tags = new Set((projection.thread.tags ?? []).map((tag) => tag.toLowerCase()));
       // Notifications and delegated completions cannot be re-sent later, so they are never held.
       const holdable =
-        !tags.has("critical") &&
         message.notification === undefined &&
         message.delegatedCompletion === undefined &&
         (message.createdBy !== "user" ||
           message.scheduledTaskId !== undefined ||
           tags.has("background"));
       const pace = holdable ? yield* serverSettings.getSettings.pipe(Effect.option) : Option.none();
-      if (Option.isSome(pace) && pace.value.paceHoldAheadPercent !== null) {
+      const aheadPercent = Option.isSome(pace) ? paceHoldAheadPercentFor(tags, pace.value) : null;
+      if (Option.isSome(pace) && aheadPercent !== null) {
         const instance = yield* providerInstances.getInstance(run.providerInstanceId);
         const now = yield* DateTime.now;
         const wakeAt =
@@ -566,7 +585,7 @@ export const layer: Layer.Layer<
             : paceHoldUntil(
                 (yield* instance.snapshot.getSnapshot).usageLimits?.windows ?? [],
                 DateTime.toEpochMillis(now),
-                pace.value.paceHoldAheadPercent,
+                aheadPercent,
                 pace.value.paceHoldResumeSlackPercent,
               );
         if (wakeAt !== null) {
