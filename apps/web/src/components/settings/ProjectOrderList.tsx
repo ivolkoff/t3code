@@ -21,11 +21,14 @@ import {
   pickableProjectGroups,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
+import { msg, T, useGT } from "gt-react";
 import { ChevronRightIcon, GripVerticalIcon, PinIcon } from "lucide-react";
 import { Fragment } from "react";
 
+import { useProjectPin } from "../../hooks/useProjectGroupUpdate";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useSidebarProjectGroups } from "../../hooks/useSidebarProjectGroups";
+import { m } from "../../i18n/messages";
 import { cn } from "../../lib/utils";
 import {
   getSidebarProjectSettingsKey,
@@ -34,6 +37,7 @@ import {
 import { useProjects } from "../../state/entities";
 import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { Button } from "../ui/button";
 import { ITEM_ROW_CLASSNAME } from "./itemRows";
 import { SettingsGroup } from "./SettingsGroup";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -42,10 +46,12 @@ const memberKeys = (group: SidebarProjectSnapshot) =>
   group.memberProjects.map((member) => member.physicalProjectKey);
 
 export function ProjectOrderList() {
+  const gt = useGT();
   const groups = useSidebarProjectGroups();
   const projects = useProjects();
   const groupingSettings = useClientSettings(selectProjectGroupingSettings);
   const reorderProjects = useUiStateStore((store) => store.reorderProjects);
+  const { canPinProjectGroup, toggleProjectGroupPin } = useProjectPin();
   const { selectScope } = useSettingsScope();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -58,16 +64,28 @@ export function ProjectOrderList() {
     shown.find((group) => group.projectKey === id);
   const nameOf = (id: UniqueIdentifier) => findGroup(id)?.displayName ?? String(id);
   const announcements: Announcements = {
-    onDragStart: ({ active }) => `Picked up ${nameOf(active.id)}.`,
+    onDragStart: ({ active }) => m(msg("Picked up {name}.", { name: nameOf(active.id) })),
     onDragOver: ({ active, over }) =>
-      over ? `${nameOf(active.id)} is over ${nameOf(over.id)}.` : undefined,
+      over
+        ? m(msg("{name} is over {target}.", { name: nameOf(active.id), target: nameOf(over.id) }))
+        : undefined,
     onDragEnd: ({ active, over }) => {
-      if (!over) return `${nameOf(active.id)} was dropped.`;
+      if (!over) return m(msg("{name} was dropped.", { name: nameOf(active.id) }));
       return findGroup(active.id)?.pinned === findGroup(over.id)?.pinned
-        ? `${nameOf(active.id)} was dropped on ${nameOf(over.id)}.`
-        : `${nameOf(active.id)} did not move. Pinned projects stay above unpinned projects.`;
+        ? m(
+            msg("{name} was dropped on {target}.", {
+              name: nameOf(active.id),
+              target: nameOf(over.id),
+            }),
+          )
+        : m(
+            msg("{name} did not move. Pinned projects stay above unpinned projects.", {
+              name: nameOf(active.id),
+            }),
+          );
     },
-    onDragCancel: ({ active }) => `Moving ${nameOf(active.id)} was cancelled.`,
+    onDragCancel: ({ active }) =>
+      m(msg("Moving {name} was cancelled.", { name: nameOf(active.id) })),
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -81,8 +99,10 @@ export function ProjectOrderList() {
   return (
     <div className="space-y-3">
       <p className="px-3 text-sm text-muted-foreground sm:px-4">
-        Choose a project to manage its name, icon, checkouts and actions. Drag projects to fix their
-        order in the sidebar.
+        <T>
+          Choose a project to manage its name, icon, checkouts and actions. Drag projects to fix
+          their order in the sidebar, or pin them to keep them on top.
+        </T>
       </p>
       <SettingsGroup>
         <DndContext
@@ -96,7 +116,7 @@ export function ProjectOrderList() {
             items={shown.map((group) => group.projectKey)}
             strategy={verticalListSortingStrategy}
           >
-            <ol aria-label="Projects, in sidebar order">
+            <ol aria-label={gt("Projects, in sidebar order")}>
               {shown.map((group, index) => (
                 <Fragment key={group.projectKey}>
                   {shown[index - 1]?.pinned && !group.pinned ? (
@@ -105,6 +125,8 @@ export function ProjectOrderList() {
                   <SortableProjectRow
                     group={group}
                     position={index + 1}
+                    canPin={canPinProjectGroup(group)}
+                    onTogglePin={() => toggleProjectGroupPin(group)}
                     onOpen={() =>
                       selectScope({
                         project: getSidebarProjectSettingsKey(group, groupingSettings, projects),
@@ -125,11 +147,16 @@ function SortableProjectRow({
   group,
   position,
   onOpen,
+  canPin,
+  onTogglePin,
 }: {
   readonly group: SidebarProjectSnapshot;
   readonly position: number;
   readonly onOpen: () => void;
+  readonly canPin: boolean;
+  readonly onTogglePin: () => void;
 }) {
+  const gt = useGT();
   const {
     attributes,
     listeners,
@@ -155,7 +182,10 @@ function SortableProjectRow({
         ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
-        aria-label={`Reorder ${group.displayName}, position ${position}`}
+        aria-label={gt("Reorder {name}, position {position}", {
+          name: group.displayName,
+          position,
+        })}
         className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing"
       >
         <GripVerticalIcon className="size-3.5" />
@@ -179,12 +209,23 @@ function SortableProjectRow({
           </span>
         </span>
       </button>
-      {group.pinned ? (
-        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
-          <PinIcon aria-hidden className="size-3" />
-          Pinned
-        </span>
-      ) : null}
+      <span className={cn("flex shrink-0", !group.pinned && "opacity-50 hover:opacity-100")}>
+        <Button
+          size="icon-xs"
+          variant="ghost-muted"
+          aria-label={
+            group.pinned
+              ? gt("Unpin {name}", { name: group.displayName })
+              : gt("Pin {name}", { name: group.displayName })
+          }
+          aria-pressed={group.pinned}
+          title={group.pinned ? gt("Unpin project") : gt("Pin project")}
+          disabled={!canPin}
+          onClick={onTogglePin}
+        >
+          {group.pinned ? <PinIcon className="fill-current" /> : <PinIcon />}
+        </Button>
+      </span>
       <button
         type="button"
         tabIndex={-1}

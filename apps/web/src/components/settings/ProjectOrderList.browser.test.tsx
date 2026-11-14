@@ -23,6 +23,14 @@ vi.mock(import("./SettingsScopeContext"), async (original) => ({
   useSettingsScope: () => ({ selectScope: vi.fn() }) as never,
 }));
 vi.mock(import("../ProjectFavicon"), () => ({ ProjectFavicon: () => <span /> }));
+vi.mock(import("../../hooks/useProjectGroupUpdate"), async (original) => ({
+  ...(await original()),
+  useProjectPin: () => ({
+    canPinProjectGroup: () => true,
+    setProjectGroupPinned: vi.fn(),
+    toggleProjectGroupPin: vi.fn(),
+  }),
+}));
 
 function group(name: string, memberKeys: readonly string[], pinned = false) {
   return {
