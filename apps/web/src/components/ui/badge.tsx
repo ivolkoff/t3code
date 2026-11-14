@@ -31,6 +31,9 @@ const badgeVariants = cva(
         secondary: "bg-secondary text-secondary-foreground [button&,a&]:hover:bg-secondary/90",
         success: "bg-success/8 text-success-foreground dark:bg-success/16",
         warning: "bg-warning/8 text-warning-foreground dark:bg-warning/16",
+        // The caller sets --badge-{light,dark}-{bg,fg} from a palette it has checked for contrast.
+        custom:
+          "bg-(--badge-light-bg) text-(--badge-light-fg) dark:bg-(--badge-dark-bg) dark:text-(--badge-dark-fg)",
         label:
           "bg-[color-mix(in_srgb,var(--label)_8%,transparent)] text-[color-mix(in_srgb,var(--label)_30%,var(--color-foreground))] dark:bg-[color-mix(in_srgb,var(--label)_12%,transparent)] dark:text-[color-mix(in_srgb,var(--label)_45%,var(--color-foreground))]",
       },

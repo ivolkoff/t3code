@@ -23,6 +23,11 @@ import {
   collectThreadTags,
   validateThreadTag,
 } from "@t3tools/client-runtime/state/threadTagFilter";
+import {
+  sortThreadTags,
+  withPresetThreadTags,
+} from "@t3tools/client-runtime/state/threadTagStyles";
+import { serverEnvironment } from "../../state/server";
 import { threadTagPickerRows } from "./thread-tags";
 
 interface ThreadTagsTarget {
@@ -62,11 +67,17 @@ function ThreadTagsSheet(props: {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const tagStyles = useAtomValue(serverEnvironment.threadTagStylesAtom(props.target.environmentId));
   const own = thread?.tags ?? [];
-  const known = collectThreadTags(
-    shells.filter((shell) => shell.environmentId === props.target.environmentId),
+  const known = sortThreadTags(
+    withPresetThreadTags(
+      collectThreadTags(
+        shells.filter((shell) => shell.environmentId === props.target.environmentId),
+      ),
+    ),
+    tagStyles,
   );
-  const rows = threadTagPickerRows(known, own, draft);
+  const rows = threadTagPickerRows(known, own, draft, tagStyles);
   const trimmed = draft.trim();
   const canCreate =
     trimmed !== "" &&

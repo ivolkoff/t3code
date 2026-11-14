@@ -31,7 +31,11 @@ import {
   MessageId,
   ThreadId,
   type ProjectScript,
+  type ThreadTagStyle,
 } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import { Atom } from "effect/reactivity";
+import { serverEnvironment } from "../../state/server";
 import {
   projectScriptCwd,
   projectScriptRuntimeEnv,
@@ -342,6 +346,8 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   );
 }
 
+const noThreadTagStylesAtom = Atom.make<ReadonlyArray<ThreadTagStyle>>([]);
+
 function ThreadRouteContent(
   props: ThreadRouteScreenProps & {
     readonly selectedThreadDetailState: ReturnType<typeof useSelectedThreadDetailState>;
@@ -507,8 +513,11 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
+  const tagStyles = useAtomValue(
+    environmentId ? serverEnvironment.threadTagStylesAtom(environmentId) : noThreadTagStylesAtom,
+  );
   const headerSubtitle = [
-    formatThreadTagsLabel(selectedThread?.tags),
+    formatThreadTagsLabel(selectedThread?.tags, tagStyles),
     selectedThreadProject?.title ?? null,
     selectedEnvironmentConnection?.environmentLabel ?? null,
     // A linked environment's delegated task names its parent; other linked work its origin.

@@ -16,6 +16,10 @@ import { visibleThreadTags } from "./thread-tags";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { threadArrangementOpenAtom } from "../../state/thread-order";
 import { threadEnvironment } from "../../state/threads";
+import { serverEnvironment } from "../../state/server";
+import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
+import { THREAD_TAG_PALETTE, threadTagColor } from "@t3tools/client-runtime/state/threadTagStyles";
+import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
 import type { ThreadMoveDestination } from "./threadOrder";
@@ -733,7 +737,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onSetThreadAutoSettle,
     onMoveThread,
   } = props;
-  const rowTags = visibleThreadTags(thread.tags);
+  const tagStyles = useAtomValue(serverEnvironment.threadTagStylesAtom(thread.environmentId));
+  const { themeAppearance } = useAppearancePreferences();
+  const rowTags = visibleThreadTags(thread.tags, tagStyles);
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
   const dormant = useSwipeRowDormant(props.activationKey);
@@ -1173,7 +1179,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       <View className="mt-1 flex-row gap-1" style={{ paddingLeft }}>
         {rowTags.shown.map((tag) => (
           <View key={tag} className="min-w-0 shrink">
-            <Chip size="small" label={tag} />
+            <Chip
+              size="small"
+              label={tag}
+              tint={THREAD_TAG_PALETTE[threadTagColor(tag, tagStyles)][themeAppearance]}
+            />
           </View>
         ))}
         {rowTags.overflow > 0 ? <Chip size="small" label={`+${rowTags.overflow}`} /> : null}
