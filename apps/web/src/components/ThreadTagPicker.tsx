@@ -1,19 +1,27 @@
 import {
-  collectThreadTags,
   suggestThreadTags,
   validateThreadTag,
 } from "@t3tools/client-runtime/state/threadTagFilter";
+import {
+  assignableThreadTags,
+  sortThreadTags,
+  threadTagColor,
+} from "@t3tools/client-runtime/state/threadTagStyles";
 import { useAtomValue } from "@effect/atom-react";
+import { T, useGT, useMessages, Var } from "gt-react";
 import { useState } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useSetThreadTag } from "../hooks/useSetThreadTag";
 import { useQuietThreadShell, useQuietThreadShells } from "../state/entities";
+import { serverEnvironment } from "../state/server";
 import {
   threadTagPickerAtom,
   type ThreadTagPickerAnchor,
   type ThreadTagPickerTarget,
 } from "../state/threadTagPicker";
+import { threadTagColorStyle } from "./ThreadTagChips";
+import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import {
   Combobox,
@@ -54,15 +62,16 @@ function ThreadTagPicker(props: { readonly target: ThreadTagPickerTarget }) {
   const thread = useQuietThreadShell(threadRef);
   const shells = useQuietThreadShells();
   const setThreadTag = useSetThreadTag();
+  const styles = useAtomValue(serverEnvironment.threadTagStylesAtom(threadRef.environmentId));
+  const gt = useGT();
+  const messages = useMessages();
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const own = thread?.tags ?? [];
   const needle = query.trim().toLowerCase();
-  const known = collectThreadTags(
-    shells.filter((shell) => shell.environmentId === threadRef.environmentId),
-  );
+  const known = assignableThreadTags(shells, threadRef.environmentId, styles);
   // suggestThreadTags ignores case, so a thread's "BUG" never also lists the known "bug".
-  const rows = [...own.toSorted(), ...suggestThreadTags(known, own)].filter(
+  const rows = [...sortThreadTags(own, styles), ...suggestThreadTags(known, own)].filter(
     (tag) => needle === "" || tag.toLowerCase().includes(needle),
   );
   const canCreate =
@@ -71,7 +80,7 @@ function ThreadTagPicker(props: { readonly target: ThreadTagPickerTarget }) {
 
   const apply = (tag: string, tagged: boolean) => setThreadTag(threadRef, tag, tagged);
   const create = () => {
-    const checked = validateThreadTag(query, own);
+    const checked = validateThreadTag(query, own, messages);
     if (checked.kind === "empty") return;
     if (checked.kind === "error") {
       setError(checked.message);
@@ -108,18 +117,33 @@ function ThreadTagPicker(props: { readonly target: ThreadTagPickerTarget }) {
       }}
     >
       <ComboboxPopup anchor={liveAnchor(anchor)} align="start" className="w-64">
-        <ComboboxSearchInput aria-label="Search or create tag" placeholder="Search or add tag" />
-        <ComboboxEmpty>No tags yet.</ComboboxEmpty>
+        <ComboboxSearchInput
+          aria-label={gt("Search or create tag")}
+          placeholder={gt("Search or add tag")}
+        />
+        <ComboboxEmpty>
+          <T>No tags yet.</T>
+        </ComboboxEmpty>
         <ComboboxList>
           {(tag: string) =>
             tag === CREATE_ROW ? (
               <ComboboxItem key={tag} value={tag}>
-                <span className="truncate">Create tag "{query.trim()}"</span>
+                <span className="truncate">
+                  <T>
+                    Create tag "<Var>{query.trim()}</Var>"
+                  </T>
+                </span>
               </ComboboxItem>
             ) : (
               <ComboboxItem key={tag} value={tag} selectedFill={false}>
                 <Checkbox checked={own.includes(tag)} tabIndex={-1} aria-hidden />
-                <span className="truncate">{tag}</span>
+                <Badge
+                  variant="custom"
+                  style={threadTagColorStyle(threadTagColor(tag, styles))}
+                  className="min-w-0 justify-start"
+                >
+                  <span className="truncate">{tag}</span>
+                </Badge>
               </ComboboxItem>
             )
           }

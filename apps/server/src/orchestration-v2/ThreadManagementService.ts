@@ -47,6 +47,8 @@ import {
   RunId,
   type ScheduledTaskId,
   applyThreadTag,
+  deleteThreadTagStyle,
+  renameThreadTagStyle,
   ThreadId,
   threadTagKey,
   type TurnItemId,
@@ -1755,6 +1757,14 @@ const make = Effect.gen(function* () {
         }),
       );
       threadCount += 1;
+    }
+    const { threadTagStyles } = yield* reportProgress(serverSettings.getSettings);
+    const nextStyles =
+      to === null
+        ? deleteThreadTagStyle(threadTagStyles, tag)
+        : renameThreadTagStyle(threadTagStyles, tag, to);
+    if (nextStyles !== threadTagStyles) {
+      yield* reportProgress(serverSettings.updateSettings({ threadTagStyles: nextStyles }));
     }
     return { threadCount };
   });
