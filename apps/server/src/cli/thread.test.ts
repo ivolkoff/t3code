@@ -47,7 +47,7 @@ const threadId = ThreadId.make("thread-1");
 const runId = RunId.make("run-1");
 
 it.effect(
-  "start resolves home-relative project paths while preserving ids and relative paths",
+  "start resolves home-relative project paths while preserving ids and relative paths, and tags threads",
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -76,9 +76,11 @@ it.effect(
           port: 3_773,
         }),
       });
+      const calls: Array<{ readonly tool: string; readonly args: unknown }> = [];
       using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(
         Effect.succeed({
           call: (tool, args) => {
+            calls.push({ tool, args });
             switch (tool) {
               case "t3_project_list":
                 return Effect.succeed({ structuredContent: { projects, nextCursor: null } });
@@ -86,6 +88,8 @@ it.effect(
                 return Effect.succeed({
                   structuredContent: { threadId, projectId: args.projectId, runId: null },
                 });
+              case "t3_thread_organize":
+                return Effect.succeed({ structuredContent: { sequence: 1 } });
               default:
                 return Effect.die(`unexpected ${tool} call`);
             }
@@ -108,6 +112,10 @@ it.effect(
           "start",
           identifier,
           "Inspect this project",
+          "--tag",
+          "review",
+          "--tag",
+          "auth",
           "--json",
           "--base-dir",
           baseDir,
@@ -121,6 +129,23 @@ it.effect(
           identifier,
         );
       }
+      assert.deepInclude(calls.findLast((entry) => entry.tool === "t3_thread_launch")?.args, {
+        tags: ["review", "auth"],
+      });
+
+      calls.length = 0;
+      yield* Command.runWith(threadCommand, { version: "0.0.0" })([
+        "untag",
+        threadId,
+        "review",
+        "auth",
+        "--base-dir",
+        baseDir,
+      ]);
+      assert.deepStrictEqual(calls, [
+        { tool: "t3_thread_organize", args: { threadId, action: "untag", tag: "review" } },
+        { tool: "t3_thread_organize", args: { threadId, action: "untag", tag: "auth" } },
+      ]);
     }).pipe(
       Effect.scoped,
       Effect.provide(
