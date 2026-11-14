@@ -166,16 +166,16 @@ function LimitRow({
           <span className="text-foreground">
             {window.label}: {left}% left
           </span>
-          {window.resetsAt && resetsAt > now ? (
-            <span className="text-muted-foreground">
-              Resets in {formatDuration(resetsAt - now)} ·{" "}
-              {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)}
-            </span>
-          ) : null}
           {pace ? (
             <span className="text-muted-foreground">
               {PACE_LABEL[pace]}
               {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`}
+            </span>
+          ) : null}
+          {window.resetsAt && resetsAt > now ? (
+            <span className="text-muted-foreground">
+              Resets in {formatDuration(resetsAt - now)} ·{" "}
+              {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)}
             </span>
           ) : null}
         </>
