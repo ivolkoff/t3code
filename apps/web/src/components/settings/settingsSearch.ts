@@ -453,7 +453,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "thread-tags",
     title: "Tags",
     to: "/settings/threads",
-    searchTerms: ["rename delete remove thread tags labels"],
+    searchTerms: ["rename delete remove thread tags labels color order"],
     environmentOnly: true,
     threadTagManagementOnly: true,
     scope: "environment",

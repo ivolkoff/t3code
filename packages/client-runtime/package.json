@@ -403,6 +403,10 @@
       "types": "./src/state/threadTagFilter.ts",
       "default": "./src/state/threadTagFilter.ts"
     },
+    "./state/threadTagStyles": {
+      "types": "./src/state/threadTagStyles.ts",
+      "default": "./src/state/threadTagStyles.ts"
+    },
     "./state/thread-settled": {
       "types": "./src/state/threadSettled.ts",
       "default": "./src/state/threadSettled.ts"
