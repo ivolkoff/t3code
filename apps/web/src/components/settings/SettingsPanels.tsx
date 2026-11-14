@@ -508,6 +508,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
       ? ["Snooze until limits reset"]
       : []),
+    ...(settings.paceHoldAheadPercent !== DEFAULT_UNIFIED_SETTINGS.paceHoldAheadPercent ||
+    settings.paceHoldResumeSlackPercent !== DEFAULT_UNIFIED_SETTINGS.paceHoldResumeSlackPercent
+      ? ["Pause background work ahead of pace"]
+      : []),
     ...(!Equal.equals(settings.snoozePresets, DEFAULT_UNIFIED_SETTINGS.snoozePresets)
       ? ["Snooze options"]
       : []),
@@ -670,6 +674,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
+      paceHoldAheadPercent: DEFAULT_UNIFIED_SETTINGS.paceHoldAheadPercent,
+      paceHoldResumeSlackPercent: DEFAULT_UNIFIED_SETTINGS.paceHoldResumeSlackPercent,
       snoozePresets: DEFAULT_UNIFIED_SETTINGS.snoozePresets,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -719,13 +725,20 @@ export function useSettingsRestore(onRestored?: () => void) {
 }
 
 const AUTO_SETTLE_DEFAULT_DAYS = DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays ?? 7;
+const PACE_HOLD_DEFAULT_AHEAD = 10;
 
-function AutoSettleDaysInput({
+function IntegerSettingInput({
   value,
+  min,
+  max,
+  ariaLabel,
   onCommit,
 }: {
   value: number;
-  onCommit: (days: number) => void;
+  min: number;
+  max: number;
+  ariaLabel: string;
+  onCommit: (value: number) => void;
 }) {
   const [draft, setDraft] = useState(String(value));
   const [draftSource, setDraftSource] = useState(value);
@@ -738,23 +751,19 @@ function AutoSettleDaysInput({
     <Input
       size="sm"
       type="number"
-      min={MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
-      max={MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
+      min={min}
+      max={max}
       className="w-full sm:w-24"
       value={draft}
       onChange={(event) => {
         setDraft(event.target.value);
         const parsed = Number(event.target.value);
-        if (
-          Number.isInteger(parsed) &&
-          parsed >= MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS &&
-          parsed <= MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS
-        ) {
+        if (Number.isInteger(parsed) && parsed >= min && parsed <= max) {
           onCommit(parsed);
         }
       }}
       onBlur={() => setDraft(String(value))}
-      aria-label="Days of inactivity before auto-settle"
+      aria-label={ariaLabel}
     />
   );
 }
@@ -1747,6 +1756,56 @@ export function ThreadsSettingsPanel() {
             />
           }
         />
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("pace-hold")}
+          description="Hold agent and scheduled turns, and all turns in threads tagged background, while a usage window runs ahead of even pace. They start when pace catches up. Threads tagged critical always run."
+          settingKeys={["paceHoldAheadPercent"]}
+          control={
+            <ScopedSwitch
+              settingKeys={["paceHoldAheadPercent"]}
+              checked={settings.paceHoldAheadPercent !== null}
+              onCheckedChange={(checked) =>
+                updateSettings({ paceHoldAheadPercent: checked ? PACE_HOLD_DEFAULT_AHEAD : null })
+              }
+              aria-label="Pause background work ahead of pace"
+            />
+          }
+        />
+        {settings.paceHoldAheadPercent !== null ? (
+          <>
+            <SettingsRow
+              serverScoped
+              settingKeys={["paceHoldAheadPercent"]}
+              title={searchableSetting("pace-hold-ahead").title}
+              description="Percentage points of the window used beyond the share of time elapsed."
+              control={
+                <IntegerSettingInput
+                  value={settings.paceHoldAheadPercent}
+                  min={0}
+                  max={100}
+                  ariaLabel="Points ahead of pace before pausing"
+                  onCommit={(value) => updateSettings({ paceHoldAheadPercent: value })}
+                />
+              }
+            />
+            <SettingsRow
+              serverScoped
+              settingKeys={["paceHoldResumeSlackPercent"]}
+              title={searchableSetting("pace-hold-resume-slack").title}
+              description="Held turns start when usage is this many points ahead of pace."
+              control={
+                <IntegerSettingInput
+                  value={settings.paceHoldResumeSlackPercent}
+                  min={0}
+                  max={100}
+                  ariaLabel="Points ahead of pace when resuming"
+                  onCommit={(value) => updateSettings({ paceHoldResumeSlackPercent: value })}
+                />
+              }
+            />
+          </>
+        ) : null}
       </SettingsSection>
 
       {hasServerTargets ? (
@@ -1820,8 +1879,11 @@ export function ThreadsSettingsPanel() {
               title={searchableSetting("days-before-auto-settle").title}
               description="Any new activity un-settles a thread automatically."
               control={
-                <AutoSettleDaysInput
+                <IntegerSettingInput
                   value={settings.sidebarAutoSettleAfterDays}
+                  min={MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
+                  max={MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS}
+                  ariaLabel="Days of inactivity before auto-settle"
                   onCommit={(days) => updateSettings({ sidebarAutoSettleAfterDays: days })}
                 />
               }

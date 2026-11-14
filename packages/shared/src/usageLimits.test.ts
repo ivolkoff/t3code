@@ -6,6 +6,7 @@ import {
   type ServerProvider,
   UsageLimitSourceId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -19,6 +20,7 @@ import {
   collectLimitPools,
   elapsedShare,
   exhaustedUsageWindow,
+  paceHoldUntil,
   paceOf,
   paceRemainingPercent,
   usesChatGptSharing,
@@ -160,6 +162,22 @@ describe("pace", () => {
     expect(paceOf(window, now)).toBe("under");
     expect(paceOf({ ...window, usedPercent: 62 }, now)).toBe("on");
     expect(paceOf({ ...window, usedPercent: 80 }, now)).toBe("ahead");
+  });
+
+  it("holds until even pace reaches usage minus the slack", () => {
+    const weekMs = 7 * 24 * 60 * 60_000;
+    const start = now - 0.4 * weekMs;
+    const weekly = {
+      id: "weekly",
+      kind: "weekly",
+      label: "Weekly",
+      usedPercent: 60,
+      windowDurationMins: 7 * 24 * 60,
+      resetsAt: DateTime.formatIso(DateTime.makeUnsafe(start + weekMs)),
+    } as const;
+    expect(paceHoldUntil([window, weekly], now, 10, 5)).toBeCloseTo(start + 0.55 * weekMs, -1);
+    expect(paceHoldUntil([{ ...weekly, usedPercent: 45 }], now, 10, 5)).toBeNull();
+    expect(paceHoldUntil([{ ...weekly, windowDurationMins: undefined }], now, 10, 5)).toBeNull();
   });
 });
 
