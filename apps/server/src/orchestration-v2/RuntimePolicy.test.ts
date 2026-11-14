@@ -5,8 +5,10 @@ import {
   type OrchestrationV2AppThread,
   ProjectId,
   ProviderInstanceId,
+  type RepositoryIdentity,
   type RuntimeMode,
   type ServerProvider,
+  SourceControlProviderKind,
   ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -16,6 +18,7 @@ import * as Stream from "effect/Stream";
 
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import { acpPermissionDisposition } from "@t3tools/provider-acp/server/clientPolicy";
+import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProjectStore from "./ProjectStore.ts";
@@ -154,6 +157,35 @@ it.layer(layerTest)("RuntimePolicyV2", (it) => {
       assert.equal(yield* modeFor(grokInstanceId, "auto"), "auto");
       assert.equal(yield* modeFor(grokInstanceId, "full-access"), "full-access");
       assert.equal(yield* modeFor(providerInstanceId, "auto-accept-edits"), "auto-accept-edits");
+    }),
+  );
+});
+
+it.layer(
+  layerTest.pipe(
+    Layer.provide(
+      Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
+        resolve: (cwd) =>
+          Effect.succeed({
+            canonicalKey: cwd,
+            locator: { source: "git-remote", remoteName: "origin", remoteUrl: cwd },
+            provider: SourceControlProviderKind.make(cwd === "/self-hosted" ? "unknown" : "github"),
+          } as RepositoryIdentity),
+      }),
+    ),
+  ),
+)("RuntimePolicyV2 with repository identities", (it) => {
+  it.effect("leaves out pull request linking only on a host with no known pull requests", () =>
+    Effect.gen(function* () {
+      const policy = yield* RuntimePolicy.RuntimePolicyV2;
+      const now = yield* DateTime.now;
+      const linkingIn = (worktreePath: string) =>
+        policy
+          .resolve({ thread: makeThread({ now, worktreePath }), modelSelection })
+          .pipe(Effect.map((resolved) => resolved.pullRequestLinking));
+
+      assert.equal(yield* linkingIn("/self-hosted"), false);
+      assert.equal(yield* linkingIn("/github"), undefined);
     }),
   );
 });
