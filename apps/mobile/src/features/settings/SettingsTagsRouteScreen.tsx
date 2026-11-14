@@ -13,10 +13,12 @@ import {
   presetThreadTag,
   resolveThreadTagStyles,
   swapThreadTagStyles,
+  threadTagColorLabel,
   THREAD_TAG_PALETTE,
   withPresetThreadTags,
 } from "@t3tools/client-runtime/state/threadTagStyles";
 import { AsyncResult } from "effect/reactivity";
+import { useGT, useMessages } from "gt-react-native";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -39,9 +41,8 @@ import { SettingsSection } from "./components/SettingsSection";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 
-const pluralThreads = (count: number) => `${count} ${count === 1 ? "thread" : "threads"}`;
-
 export function SettingsTagsRouteScreen() {
+  const gt = useGT();
   const environmentMenu = useSettingsEnvironmentMenu();
   const insets = useSafeAreaInsets();
   const { selectedTargets } = useSettingsEnvironmentFilter();
@@ -50,7 +51,7 @@ export function SettingsTagsRouteScreen() {
   );
 
   return (
-    <SettingsScreen title="Tags" menus={[environmentMenu]}>
+    <SettingsScreen title={gt("Tags")} menus={[environmentMenu]}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
@@ -61,11 +62,11 @@ export function SettingsTagsRouteScreen() {
         {targets.length === 0 ? (
           <EmptyState
             variant="plain"
-            title="Tags unavailable"
+            title={gt("Tags unavailable")}
             detail={
               selectedTargets.length === 0
-                ? "Connect to a server to rename or delete tags."
-                : "Update the connected server to rename or delete tags."
+                ? gt("Connect to a server to rename or delete tags.")
+                : gt("Update the connected server to rename or delete tags.")
             }
           />
         ) : (
@@ -87,6 +88,10 @@ function EnvironmentTags(props: {
   readonly title: string | undefined;
 }) {
   const { environmentId } = props;
+  const gt = useGT();
+  const messages = useMessages();
+  const pluralThreads = (count: number) =>
+    gt("{count, plural, one {{count} thread} other {{count} threads}}", { count });
   const usageAtom = orchestrationEnvironment.threadTagUsage({ environmentId, input: {} });
   const usage = useAtomValue(usageAtom);
   const refresh = useAtomRefresh(usageAtom);
@@ -138,15 +143,15 @@ function EnvironmentTags(props: {
   ) => {
     const outcome = await result;
     if (outcome._tag === "Failure")
-      Dialog.alert(title, failureMessage(outcome.cause, "The tag could not be changed."));
+      Dialog.alert(title, failureMessage(outcome.cause, gt("The tag could not be changed.")));
     refresh();
   };
 
   const rename = (tag: string, to: string) => {
-    const validated = validateThreadTag(to, []);
+    const validated = validateThreadTag(to, [], messages);
     if (validated.kind === "empty") return;
     if (validated.kind === "error") {
-      Dialog.alert("Could not rename tag", validated.message);
+      Dialog.alert(gt("Could not rename tag"), validated.message);
       return;
     }
     if (validated.tag === tag) return;
@@ -154,59 +159,70 @@ function EnvironmentTags(props: {
     const lower = target.toLowerCase();
     const merges = tags.some((entry) => entry.tag !== tag && entry.tag.toLowerCase() === lower);
     const submit = () =>
-      void run("Could not rename tag", renameTag({ environmentId, input: { tag, to: target } }));
+      void run(
+        gt("Could not rename tag"),
+        renameTag({ environmentId, input: { tag, to: target } }),
+      );
     if (!merges) return submit();
     Dialog.confirm({
-      title: `Merge into "${target}"?`,
-      message: `"${target}" already exists. Threads tagged "${tag}" move to it.`,
-      confirmText: "Merge",
+      title: gt('Merge into "{target}"?', { target }),
+      message: gt('"{target}" already exists. Threads tagged "{tag}" move to it.', { target, tag }),
+      confirmText: gt("Merge"),
       onConfirm: submit,
     });
   };
 
   const remove = (tag: string, threadCount: number) =>
     Dialog.confirm({
-      title: `Remove "${tag}"?`,
-      message: `Remove "${tag}" from ${pluralThreads(threadCount)}? This can't be undone.`,
-      confirmText: "Remove",
+      title: gt('Remove "{tag}"?', { tag }),
+      message: gt(
+        'Remove "{tag}" from {count, plural, one {{count} thread} other {{count} threads}}? This can\'t be undone.',
+        { tag, count: threadCount },
+      ),
+      confirmText: gt("Remove"),
       destructive: true,
       onConfirm: () =>
-        void run("Could not delete tag", deleteTag({ environmentId, input: { tag } })),
+        void run(gt("Could not delete tag"), deleteTag({ environmentId, input: { tag } })),
     });
 
   const rowActions = (style: ThreadTagStyle, index: number, threadCount: number): MenuAction[] => [
     {
       id: "color",
-      title: "Color",
+      title: gt("Color"),
       image: "paintpalette",
       attributes: { disabled: !canStyle },
       subactions: THREAD_TAG_COLORS.map((color) => ({
         id: `color:${color}`,
-        title: color,
+        title: threadTagColorLabel(color, messages),
         state: color === style.color ? "on" : "off",
       })),
     },
     {
       id: "move-up",
-      title: "Move up",
+      title: gt("Move up"),
       image: "arrow.up",
       attributes: { disabled: !canStyle || index === 0 },
     },
     {
       id: "move-down",
-      title: "Move down",
+      title: gt("Move down"),
       image: "arrow.down",
       attributes: { disabled: !canStyle || index === rows.length - 1 },
     },
     ...(threadCount > 0 && canManage
       ? [
-          { id: "rename", title: "Rename", image: "square.and.pencil" },
-          {
-            id: "delete",
-            title: "Delete",
-            image: "trash",
-            attributes: { destructive: true },
-          },
+          { id: "rename", title: gt("Rename"), image: "square.and.pencil" },
+          // Presets always come back, so deleting one would only strip it from threads.
+          ...(presetThreadTag(style.tag) === undefined
+            ? [
+                {
+                  id: "delete",
+                  title: gt("Delete"),
+                  image: "trash",
+                  attributes: { destructive: true },
+                },
+              ]
+            : []),
         ]
       : []),
   ];
@@ -220,9 +236,9 @@ function EnvironmentTags(props: {
     if (id === "delete") remove(style.tag, threadCount);
     if (id === "rename") {
       Dialog.prompt({
-        title: "Rename tag",
+        title: gt("Rename tag"),
         initialValue: style.tag,
-        confirmText: "Rename",
+        confirmText: gt("Rename"),
         onConfirm: (value) => rename(style.tag, value),
       });
     }
@@ -233,33 +249,36 @@ function EnvironmentTags(props: {
       title={props.title}
       footer={
         canManage
-          ? "Rename and delete apply to every thread, including archived ones. Tags show in this order."
+          ? gt(
+              "Rename and delete apply to every thread, including archived ones. Tags show in this order.",
+            )
           : undefined
       }
     >
       {AsyncResult.isFailure(usage) ? (
         <View className="gap-3 p-4">
           <Text className="text-foreground-muted">
-            {failureMessage(usage.cause, "The tag could not be changed.")}
+            {failureMessage(usage.cause, gt("The tag could not be changed."))}
           </Text>
-          <ListRow icon="arrow.clockwise" label="Try again" onPress={refresh} />
+          <ListRow icon="arrow.clockwise" label={gt("Try again")} onPress={refresh} />
         </View>
       ) : !AsyncResult.isSuccess(usage) ? (
         <View className="items-center p-6">
           <AppActivityIndicator />
         </View>
       ) : rows.length === 0 ? (
-        <Text className="p-4 text-foreground-muted">No tags yet.</Text>
+        <Text className="p-4 text-foreground-muted">{gt("No tags yet.")}</Text>
       ) : (
         rows.map((style, index) => {
           const threadCount = counts.get(threadTagKey(style.tag)) ?? 0;
-          const description = presetThreadTag(style.tag)?.description;
+          const preset = presetThreadTag(style.tag);
+          const description = preset === undefined ? undefined : messages(preset.description);
           return (
             <Menu
               key={style.tag}
               accessible
               accessibilityRole="button"
-              accessibilityLabel={`${style.tag}, ${style.color}, ${pluralThreads(threadCount)}`}
+              accessibilityLabel={`${style.tag}, ${threadTagColorLabel(style.color, messages)}, ${pluralThreads(threadCount)}`}
               actions={rowActions(style, index, threadCount)}
               onPressAction={({ nativeEvent }) =>
                 onRowAction(style, index, threadCount, nativeEvent.event)

@@ -3,6 +3,7 @@ import {
   presetThreadTag,
   resolveThreadTagStyles,
   swapThreadTagStyles,
+  threadTagColorLabel,
   withPresetThreadTags,
 } from "@t3tools/client-runtime/state/threadTagStyles";
 import {
@@ -14,6 +15,7 @@ import {
   type ThreadTagStyle,
 } from "@t3tools/contracts";
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon } from "lucide-react";
+import { T, useGT, useMessages } from "gt-react";
 import { useState } from "react";
 
 import { cn } from "../../lib/utils";
@@ -56,8 +58,6 @@ type Pending = { readonly kind: "rename" | "delete"; readonly tag: string; reado
 
 const COLLAPSED_TAG_COUNT = 5;
 
-const threadLabel = (count: number) => `${count} ${count === 1 ? "thread" : "threads"}`;
-
 /** Rename and delete reach every thread on the environment, archived ones included. */
 export function ThreadTagsSection() {
   const { environment } = useSettingsScope();
@@ -93,6 +93,10 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
   const [busy, setBusy] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const searchableSetting = useSearchableSetting();
+  const gt = useGT();
+  const messages = useMessages();
+  const threadLabel = (count: number) =>
+    gt("{count, plural, one {{count} thread} other {{count} threads}}", { count });
   const hiddenTags = useAtomValue(serverEnvironment.hiddenThreadTagsAtom(environmentId));
   const storedStyles = useAtomValue(serverEnvironment.threadTagStylesAtom(environmentId));
   const canStyle = useEnvironmentScope(environmentId, AuthSettingsWriteScope);
@@ -125,7 +129,8 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
   const shownTags = showAll ? tags : tags.slice(0, COLLAPSED_TAG_COUNT);
   // Hidden tags still count: renaming onto one merges, and the dialog should say so.
   const names = (query.data ?? []).map((entry) => entry.tag);
-  const rename = pending?.kind === "rename" ? checkTagRename(pending.tag, draft, names) : null;
+  const rename =
+    pending?.kind === "rename" ? checkTagRename(pending.tag, draft, names, messages) : null;
 
   const submit = async () => {
     if (pending === null || busy) return;
@@ -141,7 +146,7 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
-        title: pending.kind === "rename" ? "Could not rename tag" : "Could not delete tag",
+        title: pending.kind === "rename" ? gt("Could not rename tag") : gt("Could not delete tag"),
         description: formatEnvironmentQueryError(result.cause),
       });
     }
@@ -151,24 +156,25 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
     <SettingsSection {...searchableSetting("thread-tags")}>
       {query.error !== null && query.data === null ? (
         <SettingsRow
-          title="Could not load tags"
+          title={gt("Could not load tags")}
           description={query.error}
           control={
             <Button size="xs" variant="outline" onClick={query.refresh}>
-              Retry
+              <T>Retry</T>
             </Button>
           }
         />
       ) : query.data === null ? (
-        <SettingsRow title="Loading tags…" />
+        <SettingsRow title={gt("Loading tags…")} />
       ) : tags.length === 0 ? (
-        <SettingsRow title="No tags yet." />
+        <SettingsRow title={gt("No tags yet.")} />
       ) : (
         shownTags.map((entry, index) => (
           <SettingsRow
             key={entry.tag}
             title={entry.tag}
             description={[threadLabel(entry.threadCount), presetThreadTag(entry.tag)?.description]
+              .map((part) => part && messages(part))
               .filter(Boolean)
               .join(" · ")}
             control={
@@ -180,7 +186,11 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
                     if (color !== null) recolor(entry.tag, color);
                   }}
                 >
-                  <SelectTrigger aria-label={`Color of “${entry.tag}”`} size="xs" className="w-28">
+                  <SelectTrigger
+                    aria-label={gt("Color of “{tag}”", { tag: entry.tag })}
+                    size="xs"
+                    className="w-28"
+                  >
                     <SelectValue>
                       <TagColorSwatch color={entry.color} />
                     </SelectValue>
@@ -196,7 +206,7 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
                 <Button
                   size="icon-xs"
                   variant="outline"
-                  aria-label={`Move “${entry.tag}” up`}
+                  aria-label={gt("Move “{tag}” up", { tag: entry.tag })}
                   disabled={!canStyle || index === 0}
                   onClick={() => move(index, -1)}
                 >
@@ -205,7 +215,7 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
                 <Button
                   size="icon-xs"
                   variant="outline"
-                  aria-label={`Move “${entry.tag}” down`}
+                  aria-label={gt("Move “{tag}” down", { tag: entry.tag })}
                   disabled={!canStyle || index === tags.length - 1}
                   onClick={() => move(index, 1)}
                 >
@@ -220,18 +230,21 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
                     setPending({ kind: "rename", tag: entry.tag, count: entry.threadCount });
                   }}
                 >
-                  Rename
+                  <T>Rename</T>
                 </Button>
-                <Button
-                  size="xs"
-                  variant="destructive-outline"
-                  disabled={!canDelete || entry.threadCount === 0}
-                  onClick={() =>
-                    setPending({ kind: "delete", tag: entry.tag, count: entry.threadCount })
-                  }
-                >
-                  Delete
-                </Button>
+                {/* Presets always come back, so deleting one would only strip it from threads. */}
+                {presetThreadTag(entry.tag) === undefined ? (
+                  <Button
+                    size="xs"
+                    variant="destructive-outline"
+                    disabled={!canDelete || entry.threadCount === 0}
+                    onClick={() =>
+                      setPending({ kind: "delete", tag: entry.tag, count: entry.threadCount })
+                    }
+                  >
+                    <T>Delete</T>
+                  </Button>
+                ) : null}
               </div>
             }
           />
@@ -240,7 +253,7 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
       {hiddenCount > 0 ? (
         <div className="flex px-3 py-2 sm:px-4">
           <Button variant="ghost-muted" size="xs" onClick={() => setShowAll((open) => !open)}>
-            {showAll ? "Show less" : `Show ${hiddenCount} more`}
+            {showAll ? gt("Show less") : gt("Show {count} more", { count: hiddenCount })}
             <ChevronDownIcon
               aria-hidden
               className={cn("transition-transform", showAll && "rotate-180")}
@@ -258,17 +271,20 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
             }}
           >
             <DialogHeader>
-              <DialogTitle>Rename “{pending?.tag}”</DialogTitle>
+              <DialogTitle>{gt("Rename “{tag}”", { tag: pending?.tag ?? "" })}</DialogTitle>
               <DialogDescription>
-                Changes {threadLabel(pending?.count ?? 0)}, archived ones included.
+                {gt(
+                  "Changes {count, plural, one {{count} thread} other {{count} threads}}, archived ones included.",
+                  { count: pending?.count ?? 0 },
+                )}
                 {rename?.kind === "ok" && rename.merges
-                  ? ` “${rename.to}” already exists, so the two tags merge.`
+                  ? ` ${gt("“{tag}” already exists, so the two tags merge.", { tag: rename.to })}`
                   : ""}
               </DialogDescription>
             </DialogHeader>
             <DialogPanel>
               <Input
-                aria-label="New tag name"
+                aria-label={gt("New tag name")}
                 value={draft}
                 autoFocus
                 onChange={(event) => setDraft(event.target.value)}
@@ -279,10 +295,10 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
             </DialogPanel>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPending(null)}>
-                Cancel
+                <T>Cancel</T>
               </Button>
               <Button type="submit" disabled={busy || rename?.kind !== "ok"}>
-                {rename?.kind === "ok" && rename.merges ? "Merge" : "Rename"}
+                {rename?.kind === "ok" && rename.merges ? gt("Merge") : gt("Rename")}
               </Button>
             </DialogFooter>
           </form>
@@ -295,16 +311,22 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{pending?.tag}”?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {gt("Delete “{tag}”?", { tag: pending?.tag ?? "" })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Remove “{pending?.tag}” from {threadLabel(pending?.count ?? 0)}, archived ones
-              included? This can’t be undone.
+              {gt(
+                "Remove “{tag}” from {count, plural, one {{count} thread} other {{count} threads}}, archived ones included? This can’t be undone.",
+                { tag: pending?.tag ?? "", count: pending?.count ?? 0 },
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              <T>Cancel</T>
+            </AlertDialogClose>
             <Button variant="destructive" disabled={busy} onClick={() => void submit()}>
-              Delete
+              <T>Delete</T>
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>
@@ -314,9 +336,10 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
 }
 
 function TagColorSwatch({ color }: { readonly color: ThreadTagColor }) {
+  const messages = useMessages();
   return (
     <Badge variant="custom" style={threadTagColorStyle(color)}>
-      {color}
+      {threadTagColorLabel(color, messages)}
     </Badge>
   );
 }
