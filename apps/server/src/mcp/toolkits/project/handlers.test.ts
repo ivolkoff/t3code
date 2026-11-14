@@ -57,6 +57,7 @@ const clientLaunchHarness = (input: {
   /** Where Settings saves a project's model; the legacy project field stays null. */
   readonly overrideModel?: ModelSelection;
   readonly launched: Array<ThreadLaunch.ThreadLaunchInput>;
+  readonly dispatched?: Array<unknown>;
   readonly workspaceRoot?: string;
   readonly checkWorktreeBase?: ThreadLaunch.ThreadLaunchService["Service"]["checkWorktreeBase"];
   readonly hostedAppUrl?: string;
@@ -124,6 +125,10 @@ const clientLaunchHarness = (input: {
                 deletedAt: null,
               } as unknown as OrchestrationV2ThreadShell),
         );
+      },
+      dispatch: (command) => {
+        input.dispatched?.push(command);
+        return Effect.succeed({ sequence: 1 } as never);
       },
     }),
     Layer.mock(ThreadLaunch.ThreadLaunchService)({
@@ -444,9 +449,11 @@ it.effect("a launch with a model its provider does not advertise creates no thre
 it.effect("a launch retried with the same clientRequestId replays the first one", () =>
   Effect.gen(function* () {
     const launched: Array<ThreadLaunch.ThreadLaunchInput> = [];
+    const dispatched: Array<unknown> = [];
     const { projectId, dependencies } = clientLaunchHarness({
       runtimeModeCeiling: "auto",
       launched,
+      dispatched,
     });
     const toolkit = yield* ProjectToolkit.pipe(
       Effect.provide(
@@ -459,6 +466,7 @@ it.effect("a launch retried with the same clientRequestId replays the first one"
           title: "Fix",
           projectId,
           message: "Fix the bug",
+          tags: ["review"],
           ...(clientRequestId === undefined ? {} : { clientRequestId }),
         })
         .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
@@ -476,6 +484,15 @@ it.effect("a launch retried with the same clientRequestId replays the first one"
     expect(ids[2]).not.toEqual(ids[0]);
     // Without a key every launch is new.
     expect(ids[3]).not.toEqual(ids[4]);
+    // Its tags replay too: the same key sends the same tag command.
+    const tagged = {
+      type: "thread.tag.set",
+      commandId: `${ids[0]?.[0]}:tag:0`,
+      threadId: ids[0]?.[1],
+      tag: "review",
+      tagged: true,
+    };
+    expect(dispatched.slice(0, 2)).toEqual([tagged, tagged]);
   }),
 );
 

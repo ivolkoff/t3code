@@ -189,7 +189,8 @@ filter with its **×** button, **All tags**, or **Clear tag filter**. On mobile,
 Each device remembers its own filter.
 
 Agents can tag their own thread or another one with `t3_thread_organize`, so you can
-ask an agent to "tag this thread `review`".
+ask an agent to "tag this thread `review`". Threads an agent starts can carry tags from
+the start, and scripts can tag threads with `t3 thread tag`.
 
 Tags need a server version with tag support. On older servers, the tag controls are
 hidden.
