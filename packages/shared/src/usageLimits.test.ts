@@ -21,8 +21,10 @@ import {
   collectLimitPools,
   elapsedShare,
   exhaustedUsageWindow,
+  formatPaceReserve,
   paceOf,
   paceRemainingPercent,
+  paceReservePercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
 } from "./usageLimits.ts";
@@ -217,6 +219,11 @@ describe("pace", () => {
     expect(paceOf(window, now)).toBe("under");
     expect(paceOf({ ...window, usedPercent: 62 }, now)).toBe("on");
     expect(paceOf({ ...window, usedPercent: 80 }, now)).toBe("ahead");
+    expect(paceReservePercent(window, now)).toBe(20);
+    expect(paceReservePercent({ ...window, usedPercent: 80 }, now)).toBe(-20);
+    expect(formatPaceReserve(20)).toBe("+20%");
+    expect(formatPaceReserve(-20)).toBe("−20%");
+    expect(formatPaceReserve(0)).toBe("0%");
   });
 });
 

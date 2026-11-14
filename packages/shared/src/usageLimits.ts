@@ -742,6 +742,16 @@ export function paceRemainingPercent(
   return elapsed === null ? null : Math.round((1 - elapsed) * 100);
 }
 
+/** Elapsed minus used, in window percent: positive is reserve, negative is spending faster than time. */
+export function paceReservePercent(window: ServerProviderUsageWindow, now: number): number | null {
+  const elapsed = elapsedShare(window, now);
+  return elapsed === null ? null : Math.round(elapsed * 100 - window.usedPercent);
+}
+
+export function formatPaceReserve(reserve: number): string {
+  return `${reserve > 0 ? "+" : reserve < 0 ? "−" : ""}${Math.abs(reserve)}%`;
+}
+
 export type LimitPace = "ahead" | "on" | "under";
 
 export function paceOf(window: ServerProviderUsageWindow, now: number): LimitPace | null {
