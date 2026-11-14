@@ -427,6 +427,57 @@ it.effect("rejects an unknown organize target instead of archiving the calling t
   );
 });
 
+it.effect(
+  "deletes an idle thread and refuses the calling thread or one with a running turn",
+  () => {
+    const dispatched: Array<unknown> = [];
+    return Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      const organize = (args: Record<string, unknown>) =>
+        server
+          .callTool({ name: "t3_thread_organize", arguments: { action: "delete", ...args } })
+          .pipe(
+            Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+            Effect.provideService(McpSchema.McpServerClient, client),
+          );
+
+      const self = yield* organize({});
+      expect(declaredFailure(self)).toMatchObject({ code: "invalid_request" });
+      const busy = yield* organize({ threadId: "busy-thread" });
+      expect(declaredFailure(busy)).toMatchObject({ code: "invalid_request" });
+      expect(dispatched).toEqual([]);
+
+      const idle = yield* organize({ threadId: "idle-thread" });
+      expect(idle.isError).toBe(false);
+      expect(dispatched).toMatchObject([{ type: "thread.delete", threadId: "idle-thread" }]);
+    }).pipe(
+      Effect.provide(
+        layerThreadToolkit.pipe(
+          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+          Layer.provide(NodeCrypto.layer),
+          Layer.provide(
+            Layer.mock(ThreadManagement.ThreadManagementService)({
+              getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
+              getProjectThreadRecords: ({ threadId: id }) => {
+                const idle = McpToolAccessTestkit.idleThreadProjection(
+                  McpToolAccessTestkit.liveThreadShell(id),
+                );
+                return Effect.succeed(
+                  id === "busy-thread" ? { ...idle, runs: [{ status: "running" } as never] } : idle,
+                );
+              },
+              dispatch: (command) => {
+                dispatched.push(command);
+                return Effect.succeed({ sequence: 1 } as never);
+              },
+            }),
+          ),
+        ),
+      ),
+    );
+  },
+);
+
 it.effect("keeps unexpected handler defects private through the production registration", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
