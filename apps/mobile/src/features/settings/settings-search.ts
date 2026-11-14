@@ -126,6 +126,8 @@ const SETTINGS_SEARCH_TERMS = {
     msg("delete tag", { $context: "settings search keyword" }),
     msg("labels", { $context: "settings search keyword" }),
     msg("thread tags", { $context: "settings search keyword" }),
+    msg("tag color", { $context: "settings search keyword" }),
+    msg("tag order", { $context: "settings search keyword" }),
   ],
   SettingsArchive: [
     msg("archive", { $context: "settings search keyword" }),
