@@ -1,5 +1,6 @@
-import { useAtomMount } from "@effect/atom-react";
+import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
+import { sortThreadTags } from "@t3tools/client-runtime/state/threadTagStyles";
 import { ThreadTagChips } from "../ThreadTagChips";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
@@ -78,6 +79,7 @@ import { useNowMinute } from "../../hooks/useNowMinute";
 import { useNowSecond } from "../../hooks/useNowSecond";
 import { vcsEnvironment, vcsBranchRevalidation } from "../../state/vcs";
 import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import type { SidebarThreadSummary } from "../../types";
@@ -274,6 +276,7 @@ function SidebarThreadTooltip({
     .filter((instanceId) => instanceId !== modelInstanceId)
     .map((instanceId) => providerEntryByInstanceId.get(instanceId)?.displayName ?? instanceId);
   const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
+  const tagStyles = useAtomValue(serverEnvironment.threadTagStylesAtom(thread.environmentId));
   return (
     <ThreadHoverCardPopup side="right" align="start" sideOffset={4}>
       <ThreadHoverCard
@@ -312,7 +315,7 @@ function SidebarThreadTooltip({
             <TagIcon className="mt-0.5 size-3 shrink-0 stroke-muted-foreground" />
             {/* Capped so a long tag list wraps instead of stretching the card to its max width. */}
             <div className="min-w-0 max-w-48 flex-1 wrap-break-word text-foreground/75">
-              {thread.tags.join(", ")}
+              {sortThreadTags(thread.tags, tagStyles).join(", ")}
             </div>
           </div>
         ) : null}
@@ -1293,7 +1296,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {draftIndicator}
               {title}
-              <ThreadTagChips tags={thread.tags} />
+              <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
               {multiline ? titleLineIcons : null}
               {pinIndicator}
               {multiline ? null : terminalStatusIcon}
@@ -1626,7 +1629,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </div>
             <div className="mt-1 flex min-w-0 items-center gap-1.5">
               {title}
-              <ThreadTagChips tags={thread.tags} />
+              <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
                   Regenerating title

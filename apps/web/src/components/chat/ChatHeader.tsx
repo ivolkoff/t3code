@@ -406,10 +406,10 @@ export const ChatHeader = memo(function ChatHeader({
                 className="flex min-w-0 shrink cursor-pointer rounded-sm p-0.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={(event) => openThreadTagPicker(activeThreadRef, event.currentTarget)}
               >
-                <ThreadTagChips tags={activeThreadTags} />
+                <ThreadTagChips environmentId={activeThreadEnvironmentId} tags={activeThreadTags} />
               </button>
             ) : (
-              <ThreadTagChips tags={activeThreadTags} />
+              <ThreadTagChips environmentId={activeThreadEnvironmentId} tags={activeThreadTags} />
             )
           ) : null}
           {renamingTitle === null && activeThreadLinkOrigin ? (
