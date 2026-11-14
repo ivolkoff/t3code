@@ -1170,7 +1170,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     !showsScratchMachine &&
     prBadge === null &&
     diff === null &&
-    runningTerminalIds.length === 0;
+    runningTerminalIds.length === 0 &&
+    (thread.tags?.length ?? 0) === 0;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
       {thread.branch ? (
@@ -1200,6 +1201,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           <span className="text-diff-deletion-foreground">−{formatDiffCount(diff.deletions)}</span>
         </span>
       ) : null}
+      <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
       <span
         aria-hidden
         className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
@@ -1282,7 +1284,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {draftIndicator}
               {title}
-              <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
+              {multiline ? null : (
+                <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
+              )}
               {multiline ? titleLineIcons : null}
               {pinIndicator}
               {multiline ? null : terminalStatusIcon}
@@ -1608,7 +1612,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </div>
             <div className="mt-1 flex min-w-0 items-center gap-1.5">
               {title}
-              <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
                   Regenerating title
