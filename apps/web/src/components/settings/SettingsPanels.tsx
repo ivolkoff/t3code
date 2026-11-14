@@ -86,6 +86,7 @@ import {
   usePrimaryEnvironmentId,
 } from "../../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
+import { useThreadShells } from "../../state/entities";
 import { Button } from "../ui/button";
 import { DraftInput } from "../ui/draft-input";
 import { Input } from "../ui/input";
@@ -104,6 +105,7 @@ import {
   getChangedTypographySettingLabels,
   hasChangedBackgroundActivitySettings,
   isProjectGroupingEnabled,
+  paceHoldTagOptions,
   projectGroupingModeFromToggle,
   readLastEnabledProjectGroupingMode,
   rememberEnabledProjectGroupingMode,
@@ -835,21 +837,14 @@ function AutoSettleDaysInput({
 
 function PaceHoldTagThresholdsList({
   thresholds,
+  hiddenTags,
   onChange,
 }: {
   thresholds: ReadonlyArray<PaceHoldTagThreshold>;
+  hiddenTags: ReadonlyArray<string>;
   onChange: (thresholds: ReadonlyArray<PaceHoldTagThreshold>) => void;
 }) {
-  const [tag, setTag] = useState("");
-  const [aheadPercent, setAheadPercent] = useState(0);
-  const normalized = tag.trim().toLowerCase();
-  const canAdd =
-    normalized !== "" && !thresholds.some((entry) => entry.tag.toLowerCase() === normalized);
-  const add = () => {
-    if (!canAdd) return;
-    onChange([...thresholds, { tag: normalized, aheadPercent }]);
-    setTag("");
-  };
+  const gt = useGT();
   return (
     <div className="flex flex-col gap-1.5 pt-3 pb-2">
       {thresholds.map((entry, index) => (
@@ -859,7 +854,7 @@ function PaceHoldTagThresholdsList({
             value={entry.aheadPercent}
             min={0}
             max={100}
-            ariaLabel={`Points ahead of pace for ${entry.tag}`}
+            ariaLabel={gt("Points ahead of pace for {tag}", { tag: entry.tag })}
             onCommit={(value) =>
               onChange(
                 thresholds.map((candidate, at) =>
@@ -871,42 +866,79 @@ function PaceHoldTagThresholdsList({
           <Button
             variant="ghost-muted"
             size="icon-sm"
-            aria-label={`Remove pace limit for ${entry.tag}`}
+            aria-label={gt("Remove pace limit for {tag}", { tag: entry.tag })}
             onClick={() => onChange(thresholds.filter((_, at) => at !== index))}
           >
             <XIcon />
           </Button>
         </div>
       ))}
-      <div className="flex items-center gap-2">
-        <Input
-          size="sm"
-          className="min-w-0 flex-1"
-          placeholder="Tag"
-          aria-label="Tag"
-          value={tag}
-          onChange={(event) => setTag(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") add();
-          }}
-        />
-        <IntegerSettingInput
-          value={aheadPercent}
-          min={0}
-          max={100}
-          ariaLabel="Points ahead of pace for the new tag"
-          onCommit={setAheadPercent}
-        />
-        <Button
-          variant="ghost-muted"
-          size="icon-sm"
-          aria-label="Add pace limit"
-          disabled={!canAdd}
-          onClick={add}
-        >
-          <PlusIcon />
-        </Button>
-      </div>
+      <PaceHoldTagAddLine
+        thresholds={thresholds}
+        hiddenTags={hiddenTags}
+        onAdd={(entry) => onChange([...thresholds, entry])}
+      />
+    </div>
+  );
+}
+
+// Reads thread shells here, not in the panel, so shell updates re-render only this line.
+function PaceHoldTagAddLine({
+  thresholds,
+  hiddenTags,
+  onAdd,
+}: {
+  thresholds: ReadonlyArray<PaceHoldTagThreshold>;
+  hiddenTags: ReadonlyArray<string>;
+  onAdd: (entry: PaceHoldTagThreshold) => void;
+}) {
+  const gt = useGT();
+  const shells = useThreadShells();
+  const options = paceHoldTagOptions(
+    [...shells.map((shell) => shell.source.tags), hiddenTags],
+    thresholds,
+  );
+  const [tag, setTag] = useState<string | null>(null);
+  const [aheadPercent, setAheadPercent] = useState(0);
+  const selected = tag !== null && options.includes(tag) ? tag : null;
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        value={selected}
+        disabled={options.length === 0}
+        onValueChange={(value) => setTag(value)}
+      >
+        <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label={gt("Tag")}>
+          <SelectValue placeholder={options.length === 0 ? gt("No tags yet") : gt("Tag")} />
+        </SelectTrigger>
+        <SelectPopup align="start" alignItemWithTrigger={false}>
+          {options.map((option) => (
+            <SelectItem hideIndicator key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+      <IntegerSettingInput
+        value={aheadPercent}
+        min={0}
+        max={100}
+        ariaLabel={gt("Points ahead of pace for the new tag")}
+        onCommit={setAheadPercent}
+      />
+      <Button
+        variant="ghost-muted"
+        size="icon-sm"
+        aria-label={gt("Add pace limit")}
+        disabled={selected === null}
+        onClick={() => {
+          if (selected === null) return;
+          onAdd({ tag: selected, aheadPercent });
+          setTag(null);
+        }}
+      >
+        <PlusIcon />
+      </Button>
     </div>
   );
 }
@@ -2176,7 +2208,9 @@ export function ThreadsSettingsPanel() {
               serverScoped
               settingKeys={["paceHoldAheadPercent"]}
               title={setting("pace-hold-ahead").title}
-              description={gt("Percentage points of the window used beyond the share of time elapsed.")}
+              description={gt(
+                "Percentage points of the window used beyond the share of time elapsed.",
+              )}
               control={
                 <IntegerSettingInput
                   value={settings.paceHoldAheadPercent}
@@ -2216,6 +2250,7 @@ export function ThreadsSettingsPanel() {
         >
           <PaceHoldTagThresholdsList
             thresholds={settings.paceHoldTagThresholds}
+            hiddenTags={settings.hiddenThreadTags}
             onChange={(paceHoldTagThresholds) => updateSettings({ paceHoldTagThresholds })}
           />
         </SettingsRow>
