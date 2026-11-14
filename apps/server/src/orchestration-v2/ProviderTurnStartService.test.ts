@@ -446,6 +446,7 @@ function makeLocalCommandHarness(input: {
   };
   readonly pace?: {
     readonly aheadPercent: number | null;
+    readonly tagThresholds?: ReadonlyArray<{ readonly tag: string; readonly aheadPercent: number }>;
     readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
     readonly createdBy?: "user" | "agent";
     readonly tags?: ReadonlyArray<string>;
@@ -1271,7 +1272,12 @@ function makeLocalCommandHarness(input: {
         Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
         layerWorktreeLocation(
           input.worktreesDir,
-          input.pace === undefined ? {} : { paceHoldAheadPercent: input.pace.aheadPercent },
+          input.pace === undefined
+            ? {}
+            : {
+                paceHoldAheadPercent: input.pace.aheadPercent,
+                paceHoldTagThresholds: input.pace.tagThresholds ?? [],
+              },
         ),
         input.fileSystem === undefined
           ? FileSystem.layerNoop({ exists: () => Effect.succeed(true) })
@@ -2777,6 +2783,54 @@ effectIt.effect.each([
     aheadPercent: null,
     held: false,
   },
+  {
+    label: "an agent message in a critical thread over its threshold",
+    createdBy: "agent",
+    tags: ["Critical"],
+    tagThresholds: [{ tag: "critical", aheadPercent: 15 }],
+    held: true,
+  },
+  {
+    label: "an agent message in a critical thread under its threshold",
+    createdBy: "agent",
+    tags: ["critical"],
+    tagThresholds: [{ tag: "critical", aheadPercent: 25 }],
+    held: false,
+  },
+  {
+    label: "an agent message in a tagged thread with pace hold off",
+    createdBy: "agent",
+    aheadPercent: null,
+    tags: ["low"],
+    tagThresholds: [{ tag: "low", aheadPercent: 0 }],
+    held: true,
+  },
+  {
+    label: "an agent message under its tag thresholds and over the global one",
+    createdBy: "agent",
+    tags: ["low", "review"],
+    tagThresholds: [
+      { tag: "review", aheadPercent: 30 },
+      { tag: "low", aheadPercent: 25 },
+    ],
+    held: false,
+  },
+  {
+    label: "an agent message over the strictest of two tag thresholds",
+    createdBy: "agent",
+    tags: ["low", "review"],
+    tagThresholds: [
+      { tag: "review", aheadPercent: 30 },
+      { tag: "low", aheadPercent: 15 },
+    ],
+    held: true,
+  },
+  {
+    label: "a user message in a tagged thread",
+    tags: ["low"],
+    tagThresholds: [{ tag: "low", aheadPercent: 0 }],
+    held: false,
+  },
 ] as const)("holds $label while usage is ahead of pace: $held", (input) =>
   Effect.gen(function* () {
     const harness = makeLocalCommandHarness({
@@ -2784,6 +2838,7 @@ effectIt.effect.each([
       openFailure: new Error("provider session rejected"),
       pace: {
         aheadPercent: "aheadPercent" in input ? input.aheadPercent : 10,
+        ...("tagThresholds" in input ? { tagThresholds: input.tagThresholds } : {}),
         windows: [aheadWeekly],
         createdBy: "createdBy" in input ? input.createdBy : "user",
         ...("tags" in input ? { tags: input.tags } : {}),
