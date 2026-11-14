@@ -548,6 +548,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
       ? [gt("Snooze until limits reset")]
       : []),
+    ...(settings.paceHoldAheadPercent !== DEFAULT_UNIFIED_SETTINGS.paceHoldAheadPercent ||
+    settings.paceHoldResumeSlackPercent !== DEFAULT_UNIFIED_SETTINGS.paceHoldResumeSlackPercent
+      ? [gt("Pause background work ahead of pace")]
+      : []),
     ...(!Equal.equals(settings.snoozePresets, DEFAULT_UNIFIED_SETTINGS.snoozePresets)
       ? [gt("Snooze options")]
       : []),
@@ -724,6 +728,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
+      paceHoldAheadPercent: DEFAULT_UNIFIED_SETTINGS.paceHoldAheadPercent,
+      paceHoldResumeSlackPercent: DEFAULT_UNIFIED_SETTINGS.paceHoldResumeSlackPercent,
       snoozePresets: DEFAULT_UNIFIED_SETTINGS.snoozePresets,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -775,6 +781,7 @@ export function useSettingsRestore(onRestored?: () => void) {
 }
 
 const AUTO_SETTLE_DEFAULT_DAYS = DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays ?? 7;
+const PACE_HOLD_DEFAULT_AHEAD = 10;
 
 function AutoSettleDaysInput({
   value,
@@ -819,6 +826,47 @@ function AutoSettleDaysInput({
         }
       }}
       aria-label={gt("Days of inactivity before auto-settle")}
+    />
+  );
+}
+
+function IntegerSettingInput({
+  value,
+  min,
+  max,
+  ariaLabel,
+  onCommit,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  ariaLabel: string;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [draftSource, setDraftSource] = useState(value);
+  if (draftSource !== value) {
+    setDraftSource(value);
+    setDraft(String(value));
+  }
+
+  return (
+    <Input
+      size="sm"
+      type="number"
+      min={min}
+      max={max}
+      className="w-full sm:w-24"
+      value={draft}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        const parsed = Number(event.target.value);
+        if (Number.isInteger(parsed) && parsed >= min && parsed <= max) {
+          onCommit(parsed);
+        }
+      }}
+      onBlur={() => setDraft(String(value))}
+      aria-label={ariaLabel}
     />
   );
 }
@@ -2023,6 +2071,58 @@ export function ThreadsSettingsPanel() {
             />
           }
         />
+        <SettingsRow
+          serverScoped
+          {...setting("pace-hold")}
+          description={gt(
+            "Hold agent and scheduled turns, and all turns in threads tagged background, while a usage window runs ahead of even pace. They start when pace catches up. Threads tagged critical always run.",
+          )}
+          settingKeys={["paceHoldAheadPercent"]}
+          control={
+            <ScopedSwitch
+              settingKeys={["paceHoldAheadPercent"]}
+              checked={settings.paceHoldAheadPercent !== null}
+              onCheckedChange={(checked) =>
+                updateSettings({ paceHoldAheadPercent: checked ? PACE_HOLD_DEFAULT_AHEAD : null })
+              }
+              aria-label={gt("Pause background work ahead of pace")}
+            />
+          }
+        />
+        {settings.paceHoldAheadPercent !== null ? (
+          <>
+            <SettingsRow
+              serverScoped
+              settingKeys={["paceHoldAheadPercent"]}
+              title={setting("pace-hold-ahead").title}
+              description={gt("Percentage points of the window used beyond the share of time elapsed.")}
+              control={
+                <IntegerSettingInput
+                  value={settings.paceHoldAheadPercent}
+                  min={0}
+                  max={100}
+                  ariaLabel={gt("Points ahead of pace before pausing")}
+                  onCommit={(value) => updateSettings({ paceHoldAheadPercent: value })}
+                />
+              }
+            />
+            <SettingsRow
+              serverScoped
+              settingKeys={["paceHoldResumeSlackPercent"]}
+              title={setting("pace-hold-resume-slack").title}
+              description={gt("Held turns start when usage is this many points ahead of pace.")}
+              control={
+                <IntegerSettingInput
+                  value={settings.paceHoldResumeSlackPercent}
+                  min={0}
+                  max={100}
+                  ariaLabel={gt("Points ahead of pace when resuming")}
+                  onCommit={(value) => updateSettings({ paceHoldResumeSlackPercent: value })}
+                />
+              }
+            />
+          </>
+        ) : null}
       </SettingsSection>
 
       {hasServerTargets ? (

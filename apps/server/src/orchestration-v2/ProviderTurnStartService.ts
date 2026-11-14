@@ -1,4 +1,5 @@
 import { modelSelectionsEqual } from "@t3tools/shared/model";
+import { paceHoldUntil } from "@t3tools/shared/usageLimits";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
 import {
@@ -41,6 +42,7 @@ import { withTurnStartReservation, withWorkspaceLease } from "../workspace/works
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { makeRestoreMissingWorktree } from "../workspace/restoreMissingWorktree.ts";
 import * as EventSink from "./EventSink.ts";
@@ -263,6 +265,7 @@ export const layer: Layer.Layer<
   | GitWorkflowService.GitWorkflowService
   | ProjectService.ProjectService
   | ProviderAuthService.ProviderAuthService
+  | ProviderInstanceRegistry.ProviderInstanceRegistry
   | ProjectionStore.ProjectionStoreV2
   | ProviderSessionManager.ProviderSessionManagerV2
   | RunExecutionService.RunExecutionServiceV2
@@ -279,6 +282,8 @@ export const layer: Layer.Layer<
     const path = yield* Path.Path;
     const projects = yield* ProjectService.ProjectService;
     const providerAuth = yield* ProviderAuthService.ProviderAuthService;
+    const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
@@ -677,6 +682,53 @@ export const layer: Layer.Layer<
           });
         },
       );
+      const tags = new Set((projection.thread.tags ?? []).map((tag) => tag.toLowerCase()));
+      // Notifications and delegated completions cannot be re-sent later, so they are never held.
+      const holdable =
+        !tags.has("critical") &&
+        message.notification === undefined &&
+        message.delegatedCompletion === undefined &&
+        (message.createdBy !== "user" ||
+          message.scheduledTaskId !== undefined ||
+          tags.has("background"));
+      const pace = holdable ? yield* serverSettings.getSettings.pipe(Effect.option) : Option.none();
+      if (Option.isSome(pace) && pace.value.paceHoldAheadPercent !== null) {
+        const instance = yield* providerInstances.getInstance(run.providerInstanceId);
+        const now = yield* DateTime.now;
+        const wakeAt =
+          instance === undefined
+            ? null
+            : paceHoldUntil(
+                (yield* instance.snapshot.getSnapshot).usageLimits?.windows ?? [],
+                DateTime.toEpochMillis(now),
+                pace.value.paceHoldAheadPercent,
+                pace.value.paceHoldResumeSlackPercent,
+              );
+        if (wakeAt !== null) {
+          yield* settleRunBeforeStart({
+            run,
+            rootNode,
+            attempt,
+            turnItems: projection.turnItems,
+            signal: "pace-hold",
+            status: "failed",
+            now,
+            providerInstanceId: run.providerInstanceId,
+            itemProviderThreadId: providerThread.id,
+            item: {
+              type: "error",
+              title: "Paused while ahead of usage pace",
+              failure: makeProviderFailure({
+                class: "usage_limit",
+                code: "pace_hold",
+                message: "Ahead of usage pace",
+                resetAt: DateTime.formatIso(DateTime.makeUnsafe(wakeAt)),
+              }),
+            },
+          });
+          return;
+        }
+      }
       if (
         expandAssistantCitationsForProvider(providerMessage.text).length >
         PROVIDER_SEND_TURN_MAX_INPUT_CHARS

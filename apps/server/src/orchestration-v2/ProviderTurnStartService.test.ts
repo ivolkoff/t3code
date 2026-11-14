@@ -30,6 +30,7 @@ import {
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   type OrchestrationV2ThreadProjection,
   OrchestrationV2DomainEvent,
+  type ServerProviderUsageWindow,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
@@ -63,6 +64,7 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { layerRealGit } from "./ProviderTurnStartService.testkit.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import { withInlineContext } from "./ContextHandoffDelivery.ts";
@@ -100,11 +102,14 @@ const normalize = (target: string) => {
   }
   return `/${parts.join("/")}`;
 };
-const layerWorktreeLocation = (worktreesDir = managedWorktreesDir) =>
+const layerWorktreeLocation = (
+  worktreesDir = managedWorktreesDir,
+  settings: Parameters<typeof ServerSettings.layerTest>[0] = {},
+) =>
   Layer.mergeAll(
     Path.layer,
     Layer.mock(ServerConfig.ServerConfig)({ worktreesDir } as ServerConfig.ServerConfig["Service"]),
-    ServerSettings.layerTest(),
+    ServerSettings.layerTest(settings),
   );
 
 function startWithMissingWorktree(
@@ -225,6 +230,7 @@ function startWithMissingWorktree(
         Layer.mock(ProviderAuthService.ProviderAuthService)({
           tryHandlePromptCommand: () => Effect.succeed(false),
         }),
+        Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({}),
         Layer.mock(RunExecutionService.RunExecutionServiceV2)({ startRootRun }),
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({}),
       ),
@@ -507,6 +513,11 @@ function makeLocalCommandHarness(input: {
     readonly switchedProvider?: boolean;
     readonly threadRuntimeMode?: OrchestrationV2ThreadProjection["thread"]["runtimeMode"];
   };
+  readonly pace?: {
+    readonly aheadPercent: number | null;
+    readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
+    readonly tags?: ReadonlyArray<string>;
+  };
 }) {
   const settledRuns: Array<string> = [];
   const now = DateTime.makeUnsafe("2026-09-04T12:00:00Z");
@@ -581,6 +592,7 @@ function makeLocalCommandHarness(input: {
       branch: input.worktreePath === undefined ? null : "feature/restore",
       worktreePath: input.worktreePath ?? null,
       lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+      ...(input.pace?.tags === undefined ? {} : { tags: input.pace.tags }),
     } as OrchestrationV2ThreadProjection["thread"],
     runs: [
       ...(input.previousNativeSession
@@ -1345,7 +1357,10 @@ function makeLocalCommandHarness(input: {
         }),
         IdAllocator.layer,
         Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
-        layerWorktreeLocation(input.worktreesDir),
+        layerWorktreeLocation(
+          input.worktreesDir,
+          input.pace === undefined ? {} : { paceHoldAheadPercent: input.pace.aheadPercent },
+        ),
         input.fileSystem === undefined
           ? FileSystem.layerNoop({ exists: () => Effect.succeed(true) })
           : Layer.succeed(FileSystem.FileSystem, input.fileSystem),
@@ -1391,6 +1406,16 @@ function makeLocalCommandHarness(input: {
             ),
         }),
         Layer.mock(ProviderAuthService.ProviderAuthService)({ tryHandlePromptCommand }),
+        Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({
+          getInstance: () =>
+            Effect.succeed({
+              snapshot: {
+                getSnapshot: Effect.succeed({
+                  usageLimits: { windows: input.pace?.windows ?? [] },
+                }),
+              },
+            } as never),
+        }),
         Layer.mock(RunExecutionService.RunExecutionServiceV2)({
           startRootRun,
           forkBaseline: () => Effect.succeed(Effect.void),
@@ -3088,6 +3113,65 @@ effectIt.effect("fails a starting run when its recovery state cannot be read", (
     expect(projection.attempts[0]).toMatchObject({ status: "failed", startedAt: null });
     expect(projection.nodes[0]).toMatchObject({ status: "failed", startedAt: null });
     expect(projection.turnItems).toMatchObject([{ type: "error", status: "failed" }]);
+  }),
+);
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+// The test clock starts at 0: 40% through a week, with 60% used.
+const aheadWeekly: ServerProviderUsageWindow = {
+  id: "weekly",
+  kind: "weekly",
+  label: "Weekly",
+  usedPercent: 60,
+  windowDurationMins: 7 * 24 * 60,
+  resetsAt: DateTime.formatIso(DateTime.makeUnsafe(0.6 * WEEK_MS)),
+};
+
+effectIt.effect.each([
+  { label: "an agent message", createdBy: "agent", held: true },
+  { label: "a user message", held: false },
+  { label: "a user message in a background thread", tags: ["Background"], held: true },
+  {
+    label: "an agent message in a critical thread",
+    createdBy: "agent",
+    tags: ["critical", "background"],
+    held: false,
+  },
+  {
+    label: "an agent message with pace hold off",
+    createdBy: "agent",
+    aheadPercent: null,
+    held: false,
+  },
+] as const)("holds $label while usage is ahead of pace: $held", (input) =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({
+      text: "Continue",
+      openFailure: new Error("provider session rejected"),
+      ...("createdBy" in input ? { createdBy: input.createdBy } : {}),
+      pace: {
+        aheadPercent: "aheadPercent" in input ? input.aheadPercent : 10,
+        windows: [aheadWeekly],
+        ...("tags" in input ? { tags: input.tags } : {}),
+      },
+    });
+
+    yield* harness.start;
+
+    expect(harness.open).toHaveBeenCalledTimes(input.held ? 0 : 1);
+    expect(harness.projection().runs.at(-1)).toMatchObject({ status: "failed", startedAt: null });
+    expect(harness.projection().turnItems).toMatchObject([
+      {
+        type: "error",
+        failure: input.held
+          ? {
+              class: "usage_limit",
+              code: "pace_hold",
+              resetAt: DateTime.formatIso(DateTime.makeUnsafe(0.15 * WEEK_MS)),
+            }
+          : { class: "provider_error" },
+      },
+    ]);
   }),
 );
 
