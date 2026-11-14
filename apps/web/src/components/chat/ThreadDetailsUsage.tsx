@@ -6,9 +6,11 @@ import type {
 } from "@t3tools/contracts";
 import {
   collectProviderUsageLimits,
+  formatPaceReserve,
   type LimitPace,
   paceOf,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
@@ -167,6 +169,7 @@ function LimitRow({
   const left = remainingPercent(window);
   const pace = paceOf(window, now);
   const timeLeft = paceRemainingPercent(window, now);
+  const reserve = paceReservePercent(window, now);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   return (
     <UsageRow
@@ -184,7 +187,9 @@ function LimitRow({
           </span>
           {pace && timeLeft !== null ? (
             <span className="text-muted-foreground">
-              {m(PACE_LABEL[pace])} · {gt("{timeLeft}% of the window left", { timeLeft })}
+              {m(PACE_LABEL[pace])}
+              {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`} ·{" "}
+              {gt("{timeLeft}% of the window left", { timeLeft })}
             </span>
           ) : null}
           {window.resetsAt && resetsAt > now ? (
