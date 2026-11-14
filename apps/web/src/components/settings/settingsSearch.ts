@@ -504,6 +504,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("usage pace slack margin resume percent")],
   },
   {
+    id: "pace-hold-tags",
+    title: msg("Pace limits by tag"),
+    to: "/settings/threads",
+    searchTerms: [msg("usage pace threshold tag critical background review percent")],
+  },
+  {
     id: "working-shelf",
     title: msg("Working section"),
     to: "/settings/general",

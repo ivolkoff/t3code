@@ -274,7 +274,10 @@ usage window from running out early. While a window is more than the set number
 of points ahead of even pace, turns the agent or a scheduled task started, and
 every turn in threads tagged `background`, wait with a **Paused** notice. They
 start on their own once pace catches up, even with auto-resume off; cancel from
-the thread like any scheduled continuation. Threads tagged `critical` always run.
+the thread like any scheduled continuation. **Pace limits by tag** gives threads
+with a tag their own number of points, even with the switch off; with several
+tags the lowest wins, so `background` at 0 pauses as soon as it is ahead.
+Threads tagged `critical` always run unless `critical` has a pace limit.
 
 On web and desktop, use **Agents** to follow work delegated to subagents.
 On mobile, open a subagent from its conversation card or **Agents**. On iOS
