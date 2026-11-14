@@ -3,17 +3,25 @@ import {
   suggestThreadTags,
   validateThreadTag,
 } from "@t3tools/client-runtime/state/threadTagFilter";
+import {
+  sortThreadTags,
+  threadTagColor,
+  withPresetThreadTags,
+} from "@t3tools/client-runtime/state/threadTagStyles";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useSetThreadTag } from "../hooks/useSetThreadTag";
 import { useQuietThreadShell, useQuietThreadShells } from "../state/entities";
+import { serverEnvironment } from "../state/server";
 import {
   threadTagPickerAtom,
   type ThreadTagPickerAnchor,
   type ThreadTagPickerTarget,
 } from "../state/threadTagPicker";
+import { threadTagColorStyle } from "./ThreadTagChips";
+import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import {
   Combobox,
@@ -54,15 +62,19 @@ function ThreadTagPicker(props: { readonly target: ThreadTagPickerTarget }) {
   const thread = useQuietThreadShell(threadRef);
   const shells = useQuietThreadShells();
   const setThreadTag = useSetThreadTag();
+  const styles = useAtomValue(serverEnvironment.threadTagStylesAtom(threadRef.environmentId));
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const own = thread?.tags ?? [];
   const needle = query.trim().toLowerCase();
-  const known = collectThreadTags(
-    shells.filter((shell) => shell.environmentId === threadRef.environmentId),
+  const known = sortThreadTags(
+    withPresetThreadTags(
+      collectThreadTags(shells.filter((shell) => shell.environmentId === threadRef.environmentId)),
+    ),
+    styles,
   );
   // suggestThreadTags ignores case, so a thread's "BUG" never also lists the known "bug".
-  const rows = [...own.toSorted(), ...suggestThreadTags(known, own)].filter(
+  const rows = [...sortThreadTags(own, styles), ...suggestThreadTags(known, own)].filter(
     (tag) => needle === "" || tag.toLowerCase().includes(needle),
   );
   const canCreate =
@@ -119,7 +131,13 @@ function ThreadTagPicker(props: { readonly target: ThreadTagPickerTarget }) {
             ) : (
               <ComboboxItem key={tag} value={tag} selectedFill={false}>
                 <Checkbox checked={own.includes(tag)} tabIndex={-1} aria-hidden />
-                <span className="truncate">{tag}</span>
+                <Badge
+                  variant="custom"
+                  style={threadTagColorStyle(threadTagColor(tag, styles))}
+                  className="min-w-0 justify-start"
+                >
+                  <span className="truncate">{tag}</span>
+                </Badge>
               </ComboboxItem>
             )
           }

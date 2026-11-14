@@ -1,6 +1,21 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { MenuAction } from "@react-native-menu/menu";
+import {
+  AuthSettingsWriteScope,
+  THREAD_TAG_COLORS,
+  threadTagKey,
+  type EnvironmentId,
+  type ThreadTagColor,
+  type ThreadTagStyle,
+} from "@t3tools/contracts";
 import { validateThreadTag } from "@t3tools/client-runtime/state/threadTagFilter";
+import {
+  presetThreadTag,
+  resolveThreadTagStyles,
+  swapThreadTagStyles,
+  THREAD_TAG_PALETTE,
+  withPresetThreadTags,
+} from "@t3tools/client-runtime/state/threadTagStyles";
 import { AsyncResult } from "effect/reactivity";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,10 +24,15 @@ import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { AppText as Text } from "../../components/ui/AppText";
 import * as Dialog from "../../components/ui/Dialog";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { ListRowLayout } from "../../components/ui/ListRowLayout";
+import { Menu } from "../../components/ui/Menu";
 import { ListRow } from "../../components/ui/ListRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { failureMessage } from "../../lib/failureMessage";
 import { orchestrationEnvironment } from "../../state/orchestration";
+import { serverEnvironment } from "../../state/server";
+import { useEnvironmentScope } from "../../state/session";
+import { useAppearancePreferences } from "./appearance/AppearancePreferencesProvider";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
@@ -85,6 +105,32 @@ function EnvironmentTags(props: {
   });
 
   const tags = AsyncResult.isSuccess(usage) ? usage.value : [];
+  const storedStyles = useAtomValue(serverEnvironment.threadTagStylesAtom(environmentId));
+  const hiddenTags = useAtomValue(serverEnvironment.hiddenThreadTagsAtom(environmentId));
+  const canStyle = useEnvironmentScope(environmentId, AuthSettingsWriteScope);
+  const saveSettings = useAtomCommand(serverEnvironment.updateSettings, {
+    label: "tag style update",
+    reportFailure: true,
+  });
+  const { themeAppearance } = useAppearancePreferences();
+  const hiddenKeys = new Set((hiddenTags ?? []).map(threadTagKey));
+  const counts = new Map(tags.map((entry) => [threadTagKey(entry.tag), entry.threadCount]));
+  // Presets show before any thread carries them; every edit writes the whole ordered list.
+  const styles = resolveThreadTagStyles(
+    withPresetThreadTags(tags.map((entry) => entry.tag)),
+    storedStyles,
+  );
+  const rows = styles.filter((style) => !hiddenKeys.has(threadTagKey(style.tag)));
+  const saveStyles = (next: ReadonlyArray<ThreadTagStyle>) =>
+    void saveSettings({ environmentId, input: { patch: { threadTagStyles: next } } });
+  const move = (index: number, offset: -1 | 1) => {
+    const from = rows[index];
+    const to = rows[index + offset];
+    if (from === undefined || to === undefined) return;
+    saveStyles(swapThreadTagStyles(styles, styles.indexOf(from), styles.indexOf(to)));
+  };
+  const recolor = (tag: string, color: ThreadTagColor) =>
+    saveStyles(styles.map((style) => (style.tag === tag ? { ...style, color } : style)));
 
   const run = async (
     title: string,
@@ -128,26 +174,68 @@ function EnvironmentTags(props: {
         void run("Could not delete tag", deleteTag({ environmentId, input: { tag } })),
     });
 
-  const openActions = (tag: string, threadCount: number) =>
-    Dialog.alert(tag, pluralThreads(threadCount), [
-      {
-        text: "Rename",
-        onPress: () =>
-          Dialog.prompt({
-            title: "Rename tag",
-            initialValue: tag,
-            confirmText: "Rename",
-            onConfirm: (value) => rename(tag, value),
-          }),
-      },
-      { text: "Delete", style: "destructive", onPress: () => remove(tag, threadCount) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+  const rowActions = (style: ThreadTagStyle, index: number, threadCount: number): MenuAction[] => [
+    {
+      id: "color",
+      title: "Color",
+      image: "paintpalette",
+      attributes: { disabled: !canStyle },
+      subactions: THREAD_TAG_COLORS.map((color) => ({
+        id: `color:${color}`,
+        title: color,
+        state: color === style.color ? "on" : "off",
+      })),
+    },
+    {
+      id: "move-up",
+      title: "Move up",
+      image: "arrow.up",
+      attributes: { disabled: !canStyle || index === 0 },
+    },
+    {
+      id: "move-down",
+      title: "Move down",
+      image: "arrow.down",
+      attributes: { disabled: !canStyle || index === rows.length - 1 },
+    },
+    ...(threadCount > 0 && canManage
+      ? [
+          { id: "rename", title: "Rename", image: "square.and.pencil" },
+          {
+            id: "delete",
+            title: "Delete",
+            image: "trash",
+            attributes: { destructive: true },
+          },
+        ]
+      : []),
+  ];
+  const onRowAction = (style: ThreadTagStyle, index: number, threadCount: number, id: string) => {
+    if (id.startsWith("color:")) {
+      const color = THREAD_TAG_COLORS.find((each) => `color:${each}` === id);
+      if (color !== undefined) recolor(style.tag, color);
+    }
+    if (id === "move-up") move(index, -1);
+    if (id === "move-down") move(index, 1);
+    if (id === "delete") remove(style.tag, threadCount);
+    if (id === "rename") {
+      Dialog.prompt({
+        title: "Rename tag",
+        initialValue: style.tag,
+        confirmText: "Rename",
+        onConfirm: (value) => rename(style.tag, value),
+      });
+    }
+  };
 
   return (
     <SettingsSection
       title={props.title}
-      footer={canManage ? "Changes apply to every thread, including archived ones." : undefined}
+      footer={
+        canManage
+          ? "Rename and delete apply to every thread, including archived ones. Tags show in this order."
+          : undefined
+      }
     >
       {AsyncResult.isFailure(usage) ? (
         <View className="gap-3 p-4">
@@ -160,19 +248,42 @@ function EnvironmentTags(props: {
         <View className="items-center p-6">
           <AppActivityIndicator />
         </View>
-      ) : tags.length === 0 ? (
+      ) : rows.length === 0 ? (
         <Text className="p-4 text-foreground-muted">No tags yet.</Text>
       ) : (
-        tags.map((entry) => (
-          <ListRow
-            key={entry.tag}
-            icon="tag"
-            label={entry.tag}
-            detail={pluralThreads(entry.threadCount)}
-            disabled={!canManage}
-            onPress={() => openActions(entry.tag, entry.threadCount)}
-          />
-        ))
+        rows.map((style, index) => {
+          const threadCount = counts.get(threadTagKey(style.tag)) ?? 0;
+          const description = presetThreadTag(style.tag)?.description;
+          return (
+            <Menu
+              key={style.tag}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={`${style.tag}, ${style.color}, ${pluralThreads(threadCount)}`}
+              actions={rowActions(style, index, threadCount)}
+              onPressAction={({ nativeEvent }) =>
+                onRowAction(style, index, threadCount, nativeEvent.event)
+              }
+            >
+              <View className="bg-grouped-card">
+                <ListRowLayout
+                  leading={
+                    <View
+                      className="size-4 rounded-full"
+                      style={{
+                        backgroundColor:
+                          THREAD_TAG_PALETTE[style.color][themeAppearance].foreground,
+                      }}
+                    />
+                  }
+                  label={style.tag}
+                  {...(description === undefined ? {} : { description })}
+                  detail={pluralThreads(threadCount)}
+                />
+              </View>
+            </Menu>
+          );
+        })
       )}
     </SettingsSection>
   );

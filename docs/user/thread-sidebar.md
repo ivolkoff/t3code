@@ -176,6 +176,11 @@ To rename or delete a tag everywhere, open **Settings → Threads → Tags** on 
 **Settings → Tags** on mobile. Both change every thread on that machine, archived ones too, and
 renaming onto an existing tag merges the two.
 
+Three tags are always offered, even before any thread carries them: `critical`, `background`,
+and `private`. In the same settings page you can give each tag a color and move it up or down;
+tags show in that order everywhere, and tags you have not placed follow alphabetically. Order
+and colors are saved on the machine, so every device connected to it agrees.
+
 To show only tagged threads, pick a tag from the tag control in the sidebar header or
 from **Filter sidebar by tag** in the command palette. On web and desktop, each click in
 the sidebar's tag list checks or unchecks a tag and the list stays open; the sidebar

@@ -927,3 +927,43 @@ it.effect.each([
     }).pipe(Effect.provide(layerTest));
   },
 );
+
+it.effect.each([
+  {
+    name: "rename moves the entry",
+    to: "defect",
+    styles: [
+      { tag: "critical", color: "red" },
+      { tag: "defect", color: "orange" },
+    ],
+  },
+  { name: "delete drops it", to: null, styles: [{ tag: "critical", color: "red" }] },
+] as const)("a tag change keeps the saved tag styles in step ($name)", ({ to, styles }) => {
+  const layerTest = ThreadManagementService.layerWithLegacyImporter.pipe(
+    Layer.provide(Layer.mock(LegacyV1ThreadImporter.LegacyV1ThreadImporter)({})),
+    Layer.provide(Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({})),
+    Layer.provide(
+      Layer.mock(Orchestrator.OrchestratorV2)({
+        listTaggedThreads: () => Effect.succeed([{ threadId: ThreadId.make("a"), tags: ["Bug"] }]),
+        dispatch: () => Effect.succeed({ sequence: 1, storedEvents: [] } as never),
+      }),
+    ),
+    Layer.provideMerge(
+      ServerSettings.layerTest({
+        threadTagStyles: [
+          { tag: "critical", color: "red" },
+          { tag: "Bug", color: "orange" },
+        ],
+      }),
+    ),
+    Layer.provideMerge(layerReceiptsTest),
+  );
+  return Effect.gen(function* () {
+    const threads = yield* ThreadManagementService.ThreadManagementService;
+    yield* to === null
+      ? threads.deleteThreadTag({ tag: "bug" })
+      : threads.renameThreadTag({ tag: "bug", to });
+    const settings = yield* (yield* ServerSettings.ServerSettingsService).getSettings;
+    expect(settings.threadTagStyles).toEqual(styles);
+  }).pipe(Effect.provide(layerTest));
+});
