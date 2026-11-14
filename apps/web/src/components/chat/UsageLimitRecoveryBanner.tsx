@@ -69,7 +69,7 @@ export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBann
       variant: "warning",
       group: "environment",
       icon: <GaugeIcon />,
-      title: "Usage limit reached",
+      title: errorCode === "pace_hold" ? "Paused · ahead of usage pace" : "Usage limit reached",
       description: resetDescription,
       actions: recoveryActions,
     };
