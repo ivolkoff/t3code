@@ -425,6 +425,9 @@ export function layerWithRegistry<Error>(
         Layer.mock(ProviderAuthService.ProviderAuthService)({
           tryHandlePromptCommand: () => Effect.succeed(false),
         }),
+        Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({
+          getInstance: () => Effect.undefined,
+        }),
         layerRunExecutionServiceProvided,
         layerRuntime,
         layerServerConfig,

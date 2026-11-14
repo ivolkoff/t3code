@@ -1,4 +1,9 @@
-import { CommandId, MessageId, type OrchestrationV2Command } from "@t3tools/contracts";
+import {
+  CommandId,
+  MessageId,
+  type OrchestrationV2Command,
+  type OrchestrationV2ConversationMessage,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -19,6 +24,7 @@ export function limitRecoveryCommand(
   autoResume: boolean,
   nowMs: number,
   snooze = false,
+  heldMessage?: OrchestrationV2ConversationMessage,
 ): OrchestrationV2Command | null {
   if (
     thread.status !== "failed" ||
@@ -38,10 +44,11 @@ export function limitRecoveryCommand(
   )
     return null;
   const identity = `${thread.id}:${thread.latestRunId}:${resetMs}`;
+  const paceHold = thread.lastErrorCode === "pace_hold";
   const recovery = thread.limitRecovery;
   if (recovery?.runId !== thread.latestRunId || recovery.resetAt !== thread.usageLimitResetAt) {
     if (nowMs - resetMs > MAX_OVERDUE_ARM_MS) return null;
-    if (!autoResume && (!snooze || resetMs <= nowMs)) return null;
+    if (!autoResume && !paceHold && (!snooze || resetMs <= nowMs)) return null;
     return {
       type: "thread.metadata.update",
       commandId: CommandId.make(`limit-arm:${identity}`),
@@ -49,7 +56,7 @@ export function limitRecoveryCommand(
       limitRecovery: {
         runId: thread.latestRunId,
         resetAt: thread.usageLimitResetAt,
-        autoResume,
+        autoResume: autoResume || paceHold,
         snooze: snooze && resetMs > nowMs,
       },
     };
@@ -70,11 +77,25 @@ export function limitRecoveryCommand(
     ...(recovery.requestId === undefined
       ? {}
       : { usageLimitRecoveryRequestId: recovery.requestId }),
-    text: "Continue where you left off.",
-    attachments: [],
     dispatchMode: { type: "start_immediately" },
-    createdBy: "agent",
-    creationSource: "server",
+    // A pace hold settled the run before its prompt was sent, so it sends the prompt itself.
+    ...(paceHold && heldMessage !== undefined
+      ? {
+          text: heldMessage.text,
+          ...(heldMessage.context === undefined ? {} : { context: heldMessage.context }),
+          attachments: heldMessage.attachments,
+          ...(heldMessage.scheduledTaskId === undefined
+            ? {}
+            : { scheduledTaskId: heldMessage.scheduledTaskId }),
+          createdBy: heldMessage.createdBy,
+          creationSource: heldMessage.creationSource,
+        }
+      : {
+          text: "Continue where you left off.",
+          attachments: [],
+          createdBy: "agent",
+          creationSource: "server",
+        }),
   };
 }
 
@@ -112,15 +133,20 @@ const makeSweep = Effect.gen(function* () {
     });
     let acted = false;
     for (const thread of candidates) {
-      const command = limitRecoveryCommand(
-        thread,
-        preferences.autoResumeLimitedThreads,
-        nowMs,
-        preferences.snoozeLimitedThreads,
-      );
-      if (command === null) continue;
-      acted = true;
       yield* Effect.gen(function* () {
+        const heldMessage =
+          thread.lastErrorCode === "pace_hold" && thread.latestRunId !== null
+            ? yield* projections.getRunMessage(thread.id, thread.latestRunId)
+            : undefined;
+        const command = limitRecoveryCommand(
+          thread,
+          preferences.autoResumeLimitedThreads,
+          nowMs,
+          preferences.snoozeLimitedThreads,
+          heldMessage,
+        );
+        if (command === null) return;
+        acted = true;
         if (command.type === "thread.metadata.update" && command.limitRecovery != null) {
           yield* orchestrator.autoArmLimitRecovery({
             commandId: command.commandId,
@@ -131,12 +157,13 @@ const makeSweep = Effect.gen(function* () {
           yield* threads.dispatch(command);
         }
       }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("orchestration-v2.limit-recovery.dispatch-failed", {
+        Effect.catchCause((cause) => {
+          acted = true;
+          return Effect.logWarning("orchestration-v2.limit-recovery.dispatch-failed", {
             threadId: thread.id,
             cause,
-          }),
-        ),
+          });
+        }),
       );
     }
     // A sweep that acted, or failed to, re-checks on the next tick.

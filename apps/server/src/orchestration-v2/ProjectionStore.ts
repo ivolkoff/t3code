@@ -180,6 +180,7 @@ export type ProjectionLimitRecoveryCandidate = Pick<
   | "id"
   | "status"
   | "lastErrorClass"
+  | "lastErrorCode"
   | "latestRunId"
   | "usageLimitResetAt"
   | "archivedAt"
@@ -4163,6 +4164,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 )
                 AND (
                   ${booleanInt(options.autoResume)}
+                  OR json_extract(item.payload_json, '$.failure.code') = 'pace_hold'
                   OR (${booleanInt(options.snooze)} AND julianday(json_extract(item.payload_json, '$.failure.resetAt')) > julianday(${DateTime.formatIso(options.now)}))
                 )
                 -- A subagent of a settled, archived or deleted parent is abandoned work.
@@ -4197,6 +4199,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             id: thread.id,
             status: "failed",
             lastErrorClass: summary.lastErrorClass,
+            lastErrorCode: summary.lastErrorCode,
             usageLimitResetAt: summary.usageLimitResetAt,
             latestRunId: RunId.make(row.run_id),
             latestRunCompletedAt:

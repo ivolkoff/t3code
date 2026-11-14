@@ -299,6 +299,13 @@ the snooze. Enable **Snooze until limits reset** in thread behavior settings to
 snooze limit stops by default. Providers without a reset time offer manual
 retry and the normal snooze choices.
 
+**Pause background work ahead of pace** in **Settings → Threads** keeps a
+usage window from running out early. While a window is more than the set number
+of points ahead of even pace, turns the agent or a scheduled task started, and
+every turn in threads tagged `background`, wait with a **Paused** notice. They
+start on their own once pace catches up, even with auto-resume off; cancel from
+the thread like any scheduled continuation. Threads tagged `critical` always run.
+
 On web and desktop, use **Agents** to follow work delegated to subagents.
 On mobile, open a subagent from its conversation card or **Agents**. On iOS
 layouts with an inspector, its thread opens beside the parent. Maximize it to
