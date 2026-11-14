@@ -344,6 +344,7 @@ type CreateThreadsInput = {
   threads: Array<{
     prompt?: string;
     title?: string;
+    tags?: string[]; // up to 20
     target?: {
       providerInstanceId?: string;
       driverKind?: string;
