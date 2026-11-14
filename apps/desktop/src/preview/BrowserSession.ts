@@ -55,8 +55,16 @@ const externalProtocolPromptUrl = (rawUrl: string | undefined): string | null =>
   }
 };
 
-// Teams sends Electron User-Agents to an error page before sign-in. Electron allows one listener per session.
-const TEAMS_URL_PATTERNS = ["https://teams.cloud.microsoft/*", "https://teams.microsoft.com/*"];
+// These hosts refuse or degrade on the app and Electron User-Agent tokens (Teams error page, Entra hides
+// passkeys, WhatsApp "use Chrome"). Rewriting it everywhere breaks Turnstile. Electron allows one listener per session.
+const CHROME_USER_AGENT_URL_PATTERNS = [
+  "https://teams.cloud.microsoft/*",
+  "https://teams.microsoft.com/*",
+  "https://login.microsoftonline.com/*",
+  "https://login.live.com/*",
+  "https://web.whatsapp.com/*",
+];
+const APP_USER_AGENT_TOKENS = / (?:T3Code\S*|Electron)\/\S+/g;
 
 const MAX_PROMPT_URL_LENGTH = 300;
 
@@ -346,7 +354,7 @@ export const make = Effect.gen(function* BrowserSessionMake() {
               : ALLOWED_PREVIEW_PERMISSIONS.has(permission),
           );
           browserSession.webRequest.onBeforeSendHeaders(
-            { urls: TEAMS_URL_PATTERNS },
+            { urls: CHROME_USER_AGENT_URL_PATTERNS },
             ({ requestHeaders }, callback) => {
               const userAgent = Object.entries(requestHeaders).find(
                 ([name]) => name.toLowerCase() === "user-agent",
@@ -357,7 +365,10 @@ export const make = Effect.gen(function* BrowserSessionMake() {
               }
               const [name, value] = userAgent;
               callback({
-                requestHeaders: { ...requestHeaders, [name]: value.replace(/ Electron\/\S+/, "") },
+                requestHeaders: {
+                  ...requestHeaders,
+                  [name]: value.replace(APP_USER_AGENT_TOKENS, ""),
+                },
               });
             },
           );
