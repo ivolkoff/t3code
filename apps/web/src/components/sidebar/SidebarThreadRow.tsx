@@ -1,5 +1,6 @@
 import { useAtomMount } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
+import { ThreadTagChips } from "../ThreadTagChips";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -45,6 +46,7 @@ import {
   CircleDotDashedIcon,
   ClockIcon,
   GitBranchIcon,
+  TagIcon,
   MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
@@ -297,6 +299,15 @@ function SidebarThreadTooltip({
           <div className="flex min-w-0 items-center gap-2">
             <GitBranchIcon className="size-3 shrink-0 stroke-muted-foreground" />
             <MiddleTruncate value={thread.branch} className="flex" />
+          </div>
+        ) : null}
+        {thread.tags && thread.tags.length > 0 ? (
+          <div className="flex min-w-0 items-start gap-2">
+            <TagIcon className="mt-0.5 size-3 shrink-0 stroke-muted-foreground" />
+            {/* Capped so a long tag list wraps instead of stretching the card to its max width. */}
+            <div className="min-w-0 max-w-48 flex-1 wrap-break-word text-foreground/75">
+              {thread.tags.join(", ")}
+            </div>
           </div>
         ) : null}
         {branchMismatch ? (
@@ -1268,6 +1279,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {draftIndicator}
               {title}
+              <ThreadTagChips tags={thread.tags} />
               {multiline ? titleLineIcons : null}
               {pinIndicator}
               {multiline ? null : terminalStatusIcon}
@@ -1593,6 +1605,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </div>
             <div className="mt-1 flex min-w-0 items-center gap-1.5">
               {title}
+              <ThreadTagChips tags={thread.tags} />
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
                   Regenerating title

@@ -102,6 +102,7 @@ import {
   SettingsWorktreesRouteScreen,
   SettingsEnvironmentSourceControlRouteScreen,
 } from "./features/settings/SettingsServerControlsRouteScreen";
+import { SettingsTagsRouteScreen } from "./features/settings/SettingsTagsRouteScreen";
 import {
   SettingsScheduledTasksRouteScreen,
   SettingsScheduledTaskNewRouteScreen,
@@ -275,6 +276,11 @@ const SETTINGS_SCREENS = {
   SettingsVoiceModels: createNativeStackScreen({
     screen: SettingsVoiceModelsRouteScreen,
     options: SEARCH_SHEET_ROUTE,
+  }),
+  SettingsTags: createNativeStackScreen({
+    screen: SettingsTagsRouteScreen,
+    linking: "settings/tags",
+    options: settingsPage("Tags"),
   }),
   SettingsFollowUp: createNativeStackScreen({
     screen: SettingsFollowUpRouteScreen,

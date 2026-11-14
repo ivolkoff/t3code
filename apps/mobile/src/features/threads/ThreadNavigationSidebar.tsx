@@ -1,4 +1,5 @@
 import { useActiveNewTask } from "../../state/active-new-task";
+import { threadTagKey } from "@t3tools/contracts";
 import { ThreadUndoNotice } from "../home/ThreadUndoNotice";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import {
@@ -26,7 +27,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
-import { useProjects, useNavigationThreadShells } from "../../state/entities";
+import { useProjects, useNavigationThreadShells, useQuietThreadShells } from "../../state/entities";
+import { useAtomValueWhileVisible } from "../home/home-route-visibility";
+import { environmentThreadShells } from "../../state/threads";
 import { useThreadSearch } from "../../state/queries";
 import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 import { useThreadListNow } from "./use-thread-list-now";
@@ -44,6 +47,8 @@ import { useThreadListV2 } from "./useThreadListV2";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { requestThreadMessageJump } from "./threadMessageJump";
 import { useThreadListSearchMatches } from "./useThreadListSearchMatches";
+import { collectThreadTags } from "@t3tools/client-runtime/state/threadTagFilter";
+import { filterListedThreadsByTag } from "./thread-tags";
 import { useHomeListOptions } from "../home/home-list-options";
 import { buildHomeListFilterMenuItems } from "../home/home-list-filter-menu";
 import { buildHomeProjectScopes } from "../home/homeThreadList";
@@ -140,7 +145,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     regenerateThreadTitle,
   } = useThreadListActions();
   const pendingTasks = usePendingNewTasks();
-  const launchingThreads = useLaunchingThreads(threads);
+  const allLaunchingThreads = useLaunchingThreads(threads);
   const activeNewTask = useActiveNewTask();
   const queuedThreadKeys = useQueuedThreadKeys();
   const selectDetail = useSelectWorkspaceDetail();
@@ -156,8 +161,27 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   const availableEnvironmentIds = new Set(
     environments.map((environment) => environment.environmentId),
   );
-  const { options, setSelectedEnvironmentId, setSelectedProjectKey } =
-    useHomeListOptions(availableEnvironmentIds);
+  const listEnvironments = useAtomValue(threadListEnvironmentsAtom);
+  const { options, setSelectedEnvironmentId, setSelectedProjectKey, setSelectedTag } =
+    useHomeListOptions(availableEnvironmentIds, listEnvironments.tagEnvironmentIds);
+  const selectedTag = options.selectedTag;
+  const fullShells = useAtomValueWhileVisible(
+    environmentThreadShells.threadShellsAtom,
+    selectedTag !== null,
+  );
+  const launchingThreads = useMemo(
+    () => filterListedThreadsByTag(allLaunchingThreads, fullShells, selectedTag),
+    [allLaunchingThreads, fullShells, selectedTag],
+  );
+  // Quiet shells include nested subagents, so a tag only a child carries is still offered.
+  const quietShells = useQuietThreadShells();
+  const tags = useMemo(() => {
+    const known = collectThreadTags(quietShells);
+    return selectedTag === null ||
+      known.some((tag) => threadTagKey(tag) === threadTagKey(selectedTag))
+      ? known
+      : [...known, selectedTag];
+  }, [quietShells, selectedTag]);
   const searchEnvironmentIds =
     options.selectedEnvironmentId === null
       ? workspaceEnvironments
@@ -248,7 +272,6 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
   const now = useThreadListNow(threads);
-  const listEnvironments = useAtomValue(threadListEnvironmentsAtom);
   const {
     providersByEnvironmentId,
     machineByEnvironmentId,
@@ -257,6 +280,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     snoozePresetsByEnvironmentId,
     pinningEnvironmentIds,
     autoSettleOptOutEnvironmentIds,
+    tagEnvironmentIds,
     pinReorderEnvironmentIds,
     activeReorderEnvironmentIds,
     titleRegenerationEnvironmentIds,
@@ -281,6 +305,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     activeReorderEnvironmentIds,
     queuedThreadKeys,
     settledLimit: settledVisibleCount,
+    tagFilterActive: selectedTag !== null,
     now,
     pendingOrder,
     shelfPreferencesLoaded,
@@ -463,6 +488,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             snoozePresets={snoozePresetsByEnvironmentId.get(thread.environmentId)}
             pinningSupported={pinningEnvironmentIds.has(thread.environmentId)}
             autoSettleOptOutSupported={autoSettleOptOutEnvironmentIds.has(thread.environmentId)}
+            tagsSupported={tagEnvironmentIds.has(thread.environmentId)}
             reorderSupported={
               item.item.pinned
                 ? pinReorderEnvironmentIds.has(thread.environmentId)
@@ -539,7 +565,10 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         accessibilityLabel: "Search threads",
       }}
       filter={{
-        customized: options.selectedEnvironmentId !== null || selectedProjectKey !== null,
+        customized:
+          options.selectedEnvironmentId !== null ||
+          selectedProjectKey !== null ||
+          selectedTag !== null,
         items: buildHomeListFilterMenuItems({
           environments,
           projects: projectFilterOptions,
@@ -547,6 +576,9 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
           selectedProjectKey,
           onEnvironmentChange: setSelectedEnvironmentId,
           onProjectChange: setSelectedProjectKey,
+          tags,
+          selectedTag,
+          onTagChange: setSelectedTag,
         }),
       }}
       sidebar={{
@@ -572,9 +604,11 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             ? threadSearch.isPending
               ? "Searching thread messages…"
               : "No matching threads"
-            : selectedProjectScope !== null
-              ? `No threads in ${selectedProjectScope.title}`
-              : "No threads yet"}
+            : selectedTag !== null
+              ? `No threads tagged ${selectedTag}`
+              : selectedProjectScope !== null
+                ? `No threads in ${selectedProjectScope.title}`
+                : "No threads yet"}
     </Text>
   );
 

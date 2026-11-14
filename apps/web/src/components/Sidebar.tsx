@@ -8,6 +8,13 @@ import {
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
+import { openThreadTagPicker } from "../state/threadTagPicker";
+import { useSidebarTagFilter } from "../hooks/useSidebarTagFilter";
+import { SidebarTagFilterBar, SidebarTagFilterMenu } from "./sidebar/SidebarTagFilter";
+import {
+  collectThreadTags,
+  filterThreadsByTag,
+} from "@t3tools/client-runtime/state/threadTagFilter";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
@@ -56,6 +63,7 @@ import {
 import {
   AuthOrchestrationOperateScope,
   ProjectId,
+  threadTagKey,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -147,7 +155,8 @@ import {
   useQuietThreadShells,
 } from "../state/entities";
 import { environmentPresentations } from "../state/presentation";
-import { primaryServerKeybindingsAtom } from "../state/server";
+import { environmentIdsKey } from "../state/environmentAtomList";
+import { environmentHiddenThreadTagsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { environmentProjects } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
 import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/olderSettledShelf";
@@ -424,6 +433,8 @@ function useSidebarThreads(input: {
   readonly folderGroups: readonly SidebarProjectSnapshot[] | null;
   // Keeps folders with no active threads, so a project the user filtered to or pinned can start one.
   readonly keepEmptyFolders: (group: SidebarProjectSnapshot) => boolean;
+  // Shells carry every tagged thread, so a tag filter lists them all and reads no older pages.
+  readonly tagFilterActive: boolean;
 }) {
   const {
     projectScopeKey,
@@ -436,6 +447,7 @@ function useSidebarThreads(input: {
     routeRowThreadKey,
     folderGroups,
     keepEmptyFolders: keepEmpty,
+    tagFilterActive,
   } = input;
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
@@ -493,12 +505,15 @@ function useSidebarThreads(input: {
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
     expanded: settledShelfExpanded,
-    visibleCount: settledVisibleCount,
+    visibleCount: tagFilterActive ? 0 : settledVisibleCount,
   });
-  const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
+  const listedSettledThreads = tagFilterActive
+    ? settledThreads
+    : settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
-  const settledCount =
-    settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
+  const settledCount = tagFilterActive
+    ? settledThreads.length
+    : settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
   const visibleSettledThreads = (() => {
     const visible = listedSettledThreads.slice(0, settledVisibleCount);
     if (
@@ -896,6 +911,8 @@ function readRouteThreadKey(router: AnyRouter): string | null {
   return ref === null ? null : scopedThreadKey(ref);
 }
 
+const NO_TAG_FILTER: ReadonlyArray<string> = [];
+
 export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReveal }) {
   const {
     projects,
@@ -1102,7 +1119,23 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
   const threads = useQuietThreadShells();
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
-  const listedThreads =
+  const [savedTagFilter, setTagFilter] = useSidebarTagFilter();
+  // Kept while no server supports tags, so the filter returns when one connects.
+  const tagsSupported = [...serverConfigs.values()].some(
+    (config) => config.environment.capabilities.threadTags === true,
+  );
+  const hiddenTagKeysByEnvironment = useAtomValue(
+    environmentHiddenThreadTagsAtom(environmentIdsKey(connectedEnvironmentIds)),
+  ).map((tags) => new Set((tags ?? []).map(threadTagKey)));
+  // Dropped only when every server hides it; elsewhere the tag still filters its own threads.
+  const hiddenEverywhere = (tag: string) =>
+    hiddenTagKeysByEnvironment.length > 0 &&
+    hiddenTagKeysByEnvironment.every((keys) => keys.has(threadTagKey(tag)));
+  const tagFilter = tagsSupported
+    ? savedTagFilter.filter((tag) => !hiddenEverywhere(tag))
+    : NO_TAG_FILTER;
+  const knownTags = collectThreadTags(threads);
+  const launchingThreads =
     promotingDraftThreadKeys.length === 0
       ? threads
       : threads.map((thread) =>
@@ -1110,6 +1143,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ? asLaunchingThread(thread)
             : thread,
         );
+  const listedThreads = filterThreadsByTag(launchingThreads, tagFilter);
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -1344,6 +1378,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     threads: listedThreads,
     delegatedUnderParent,
     routeRowThreadKey,
+    tagFilterActive: tagFilter.length > 0,
     folderGroups: boringSidebarEnabled
       ? scopedProjectGroups.length === 0
         ? // An archived project keeps a folder for its active threads, below the rest.
@@ -2659,6 +2694,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 autoSettleOptOut: supportsAutoSettleOptOut,
                 snooze: configLoaded,
                 pinning: configLoaded,
+                threadTags:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities.threadTags ===
+                  true,
                 titleRegeneration: configLoaded,
               },
               snoozePresets,
@@ -2682,6 +2720,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           return;
         }
         switch (clicked.value) {
+          case "tags":
+            openThreadTagPicker(threadRef, position);
+            return;
           case "filter-by-project":
             if (threadProjectGroup) {
               setProjectScopeKeys(
@@ -2974,6 +3015,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
+              tagFilterMenu={
+                tagsSupported ? (
+                  <SidebarTagFilterMenu
+                    tags={knownTags}
+                    active={tagFilter}
+                    onChange={setTagFilter}
+                  />
+                ) : null
+              }
+              tagFilterBar={
+                <SidebarTagFilterBar active={tagFilter} onClear={() => setTagFilter([])} />
+              }
               projectScope={
                 <Combobox
                   items={projectScopeItems}
@@ -3643,6 +3696,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 "No threads in these projects yet"
               ) : scopedProjectGroups[0] ? (
                 `No threads in ${scopedProjectGroups[0].displayName} yet`
+              ) : tagFilter.length > 0 ? (
+                `No threads tagged ${tagFilter.join(" or ")}`
               ) : (
                 "No threads yet"
               )}
