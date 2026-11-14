@@ -76,6 +76,8 @@ export function ThreadTagsPanel(props: {
                   onClick={() =>
                     void navigate({
                       to: "/settings/threads",
+                      // Tags belong to one environment; without it the page asks for a scope.
+                      search: { machine: props.environmentId },
                       hash: searchableSetting("thread-tags").id,
                     })
                   }
