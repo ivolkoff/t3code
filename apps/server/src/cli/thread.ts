@@ -848,6 +848,10 @@ const threadStartCommand = Command.make("start", {
     Flag.withDescription("Branch name for the new worktree."),
     Flag.optional,
   ),
+  tag: Flag.String("tag").pipe(
+    Flag.withDescription("Tag the thread. Repeat for more tags."),
+    Flag.atLeast(0),
+  ),
   wait: waitFlag,
   json: jsonFlag,
 }).pipe(
@@ -870,6 +874,7 @@ const threadStartCommand = Command.make("start", {
               projectId: project.id,
               title,
               message,
+              ...(flags.tag.length === 0 ? {} : { tags: flags.tag }),
               ...(workspaceStrategy === undefined ? {} : { workspaceStrategy }),
               ...(modelSelection === undefined ? {} : { modelSelection }),
             },
@@ -986,12 +991,41 @@ const threadShowCommand = Command.make("show", {
   ),
 );
 
+const threadTagCommand = (action: "tag" | "untag") =>
+  Command.make(action, {
+    ...projectLocationFlags,
+    thread: threadArgument,
+    tags: Argument.String("tags").pipe(
+      Argument.withDescription("Tags to add or remove."),
+      Argument.atLeast(1),
+    ),
+  }).pipe(
+    Command.withDescription(
+      action === "tag" ? "Add tags to a thread." : "Remove tags from a thread.",
+    ),
+    Command.withHandler((flags) =>
+      Effect.gen(function* () {
+        const threadId = yield* decodeThreadId(flags.thread);
+        yield* withThreadTools(
+          { ...flags, json: false },
+          Effect.fn("cli.thread.tag")(function* (tools) {
+            for (const tag of flags.tags) {
+              yield* tools.call("t3_thread_organize", { threadId, action, tag }, Schema.Unknown);
+            }
+          }),
+        );
+      }).pipe(reportThreadErrors),
+    ),
+  );
+
 export const threadCommand = Command.make("thread").pipe(
-  Command.withDescription("Start, message, and read threads on the running server."),
+  Command.withDescription("Start, message, read, and tag threads on the running server."),
   Command.withSubcommands([
     threadListCommand,
     threadStartCommand,
     threadSendCommand,
     threadShowCommand,
+    threadTagCommand("tag"),
+    threadTagCommand("untag"),
   ]),
 );

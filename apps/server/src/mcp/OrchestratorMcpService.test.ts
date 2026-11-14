@@ -3399,11 +3399,18 @@ describe("OrchestratorMcpService provider resolution", () => {
           assert.equal((yield* orchestrator.getThreadProjection(raisedId)).runs.length, 0);
 
           const emojiAtLimit = yield* service.createThreads(scope, {
-            threads: [{ ...request.threads[0]!, prompt: `${"a".repeat(76)}😀 and more work.` }],
+            threads: [
+              {
+                ...request.threads[0]!,
+                prompt: `${"a".repeat(76)}😀 and more work.`,
+                tags: ["review", "Review", "auth"],
+              },
+            ],
             clientRequestId: "emoji-title",
           });
           const titled = yield* orchestrator.getThreadProjection(emojiAtLimit.threads[0]!.threadId);
           assert.equal(titled.thread.title, `${"a".repeat(76)}...`);
+          assert.deepEqual(titled.thread.tags, ["review", "auth"]);
           // One commit holds a prompted thread and its run, so no client sees it idle between.
           const promptedCommits = yield* orchestrator
             .streamStoredEventsFrom({ threadId: titled.thread.id })

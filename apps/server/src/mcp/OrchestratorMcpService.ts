@@ -3290,6 +3290,24 @@ const make = Effect.gen(function* () {
                     ),
                   ),
                 );
+              yield* Effect.forEach(request.tags ?? [], (tag, tagIndex) =>
+                threadManagement
+                  .dispatch({
+                    type: "thread.tag.set",
+                    commandId: CommandId.make(`${commandId}:tag:${tagIndex}`),
+                    threadId,
+                    tag,
+                    tagged: true,
+                  })
+                  .pipe(
+                    Effect.mapError((error) =>
+                      failure(
+                        "orchestration_error",
+                        `Unable to tag thread ${index + 1}: ${errorMessage(error)}`,
+                      ),
+                    ),
+                  ),
+              );
               // A receipt can appear after target resolution; use the committed thread's selection.
               const resolvedModelSelection = (yield* threadManagement
                 .getThreadRecords(threadId, [])
