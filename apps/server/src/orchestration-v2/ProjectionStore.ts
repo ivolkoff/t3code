@@ -431,6 +431,8 @@ export interface ActiveShellIndexEntry extends Pick<
 > {
   /** False only when no run, request, work item, or watch can make the shell live. */
   readonly mayBeLive: boolean;
+  /** Tagged threads stay in shells, so a client's tag filter sees every match. */
+  readonly tagged: boolean;
 }
 
 export interface OlderSettledThreadsQuery {
@@ -520,6 +522,11 @@ export interface ProjectionStoreV2Shape {
   >;
   /** Threads that are not deleted, archived ones included. */
   readonly countThreads: () => Effect.Effect<number, ProjectionStoreV2Error>;
+  /** Tagged threads that are not deleted, archived ones included, oldest first. */
+  readonly listTaggedThreads: () => Effect.Effect<
+    ReadonlyArray<{ readonly threadId: ThreadId; readonly tags: ReadonlyArray<string> }>,
+    ProjectionStoreV2Error
+  >;
   /** Every active thread, in shell order. */
   readonly listActiveShellIndex: () => Effect.Effect<
     ReadonlyArray<ActiveShellIndexEntry>,
@@ -7363,6 +7370,22 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       return rows[0]?.count ?? 0;
     }, Effect.mapError(shellSnapshotReadError));
 
+    const listTaggedThreads = Effect.fn("ProjectionStore.listTaggedThreads")(function* () {
+      const rows = yield* sql<{ readonly thread_id: string; readonly tag: string }>`
+        SELECT t.thread_id, tag.value AS tag
+        FROM orchestration_v2_projection_threads t, json_each(t.payload_json, '$.tags') tag
+        WHERE t.deleted_at IS NULL AND tag.type = 'text'
+        ORDER BY t.created_at ASC, t.thread_id ASC, tag.key ASC
+      `;
+      const byThread = new Map<string, Array<string>>();
+      for (const row of rows) {
+        const tags = byThread.get(row.thread_id);
+        if (tags === undefined) byThread.set(row.thread_id, [row.tag]);
+        else tags.push(row.tag);
+      }
+      return [...byThread].map(([threadId, tags]) => ({ threadId: ThreadId.make(threadId), tags }));
+    }, Effect.mapError(shellSnapshotReadError));
+
     const listActiveShellIndex = Effect.fn("ProjectionStore.listActiveShellIndex")(function* () {
       const rows = yield* sql<{
         readonly thread_id: string;
@@ -7376,6 +7399,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         readonly pinned_at: string | null;
         readonly snoozed_until: string | null;
         readonly may_be_live: number;
+        readonly tagged: number;
       }>`
         SELECT
           t.thread_id,
@@ -7421,7 +7445,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               SELECT 1 FROM json_each(t.payload_json, '$.pullRequests') link
               WHERE json_type(link.value, '$.watch') IS NOT NULL
             )
-          ) AS may_be_live
+          ) AS may_be_live,
+          COALESCE(json_array_length(t.payload_json, '$.tags'), 0) > 0 AS tagged
         FROM orchestration_v2_projection_threads t
         WHERE t.deleted_at IS NULL
           AND json_extract(t.payload_json, '$.archivedAt') IS NULL
@@ -7448,6 +7473,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         pinnedAt: row.pinned_at === null ? null : DateTime.makeUnsafe(row.pinned_at),
         snoozedUntil: row.snoozed_until === null ? null : DateTime.makeUnsafe(row.snoozed_until),
         mayBeLive: row.may_be_live === 1,
+        tagged: row.tagged === 1,
       }));
     }, Effect.mapError(shellSnapshotReadError));
 
@@ -7639,6 +7665,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getPullRequestSnapshot: readOnReader(getPullRequestSnapshot),
       listActiveSubagentThreadIds: readOnReader(listActiveSubagentThreadIds),
       countThreads: readOnReader(countThreads),
+      listTaggedThreads: readOnReader(listTaggedThreads),
       listActiveShellIndex: readOnReader(listActiveShellIndex),
       readShellSnapshot: readOnReader(readShellSnapshot),
       listOlderSettledThreads: readOnReader(listOlderSettledThreads),
