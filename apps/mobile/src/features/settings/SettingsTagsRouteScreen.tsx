@@ -201,12 +201,17 @@ function EnvironmentTags(props: {
     ...(threadCount > 0 && canManage
       ? [
           { id: "rename", title: "Rename", image: "square.and.pencil" },
-          {
-            id: "delete",
-            title: "Delete",
-            image: "trash",
-            attributes: { destructive: true },
-          },
+          // Presets always come back, so deleting one would only strip it from threads.
+          ...(presetThreadTag(style.tag) === undefined
+            ? [
+                {
+                  id: "delete",
+                  title: "Delete",
+                  image: "trash",
+                  attributes: { destructive: true },
+                },
+              ]
+            : []),
         ]
       : []),
   ];

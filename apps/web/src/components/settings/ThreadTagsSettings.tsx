@@ -222,16 +222,19 @@ function ThreadTagsList({ environmentId }: { readonly environmentId: Environment
                 >
                   Rename
                 </Button>
-                <Button
-                  size="xs"
-                  variant="destructive-outline"
-                  disabled={!canDelete || entry.threadCount === 0}
-                  onClick={() =>
-                    setPending({ kind: "delete", tag: entry.tag, count: entry.threadCount })
-                  }
-                >
-                  Delete
-                </Button>
+                {/* Presets always come back, so deleting one would only strip it from threads. */}
+                {presetThreadTag(entry.tag) === undefined ? (
+                  <Button
+                    size="xs"
+                    variant="destructive-outline"
+                    disabled={!canDelete || entry.threadCount === 0}
+                    onClick={() =>
+                      setPending({ kind: "delete", tag: entry.tag, count: entry.threadCount })
+                    }
+                  >
+                    Delete
+                  </Button>
+                ) : null}
               </div>
             }
           />
