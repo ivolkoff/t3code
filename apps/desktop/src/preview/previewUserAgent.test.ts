@@ -1,8 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { resolvePreviewUserAgent } from "./previewUserAgent.ts";
+import { resolvePreviewUserAgent, resolvePreviewUserAgentMetadata } from "./previewUserAgent.ts";
 
-const engine = { chromeVersion: "152.0.7977.169", platform: "darwin" as const };
+const engine = {
+  chromeVersion: "152.0.7977.169",
+  platform: "darwin" as const,
+  arch: "arm64",
+  systemVersion: "27.2.1",
+};
 
 describe("resolvePreviewUserAgent", () => {
   it("keeps the native User-Agent for the native preset", () => {
@@ -20,7 +25,7 @@ describe("resolvePreviewUserAgent", () => {
     assert.strictEqual(
       resolvePreviewUserAgent(
         { browserUserAgentPreset: "chrome", browserUserAgent: "" },
-        { chromeVersion: "153.0.1.2", platform: "win32" },
+        { ...engine, chromeVersion: "153.0.1.2", platform: "win32" },
       ),
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
     );
@@ -44,9 +49,42 @@ describe("resolvePreviewUserAgent", () => {
     assert.strictEqual(
       resolvePreviewUserAgent(
         { browserUserAgentPreset: "custom", browserUserAgent: "Foo Chrome/{chrome}" },
-        { chromeVersion: "", platform: "darwin" },
+        { ...engine, chromeVersion: "" },
       ),
       "",
     );
+  });
+
+  it("reports Chrome Client Hints for Chrome presets only", () => {
+    const host = resolvePreviewUserAgentMetadata(
+      { browserUserAgentPreset: "chrome", browserUserAgent: "" },
+      engine,
+    );
+    assert.deepStrictEqual(host?.brands, [
+      { brand: "Not?A_Brand", version: "24" },
+      { brand: "Chromium", version: "152" },
+      { brand: "Google Chrome", version: "152" },
+    ]);
+    assert.deepStrictEqual(host?.fullVersionList[2], {
+      brand: "Google Chrome",
+      version: "152.0.7977.169",
+    });
+    assert.include(host, { platform: "macOS", platformVersion: "27.2.1", architecture: "arm" });
+
+    const windows = resolvePreviewUserAgentMetadata(
+      { browserUserAgentPreset: "chrome-windows", browserUserAgent: "" },
+      engine,
+    );
+    assert.include(windows, {
+      platform: "Windows",
+      platformVersion: "10.0.0",
+      architecture: "x86",
+    });
+
+    for (const browserUserAgentPreset of ["native", "custom"] as const) {
+      assert.isNull(
+        resolvePreviewUserAgentMetadata({ browserUserAgentPreset, browserUserAgent: "x" }, engine),
+      );
+    }
   });
 });

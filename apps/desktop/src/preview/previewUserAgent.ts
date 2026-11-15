@@ -16,10 +16,56 @@ export type PreviewUserAgentSettings = Pick<
 export interface PreviewEngine {
   readonly chromeVersion: string;
   readonly platform: NodeJS.Platform;
+  readonly arch: string;
+  /** The host OS version, as Chromium reports it in Sec-CH-UA-Platform-Version. */
+  readonly systemVersion: string;
+}
+
+interface UserAgentBrand {
+  readonly brand: string;
+  readonly version: string;
+}
+
+/** CDP `Emulation.UserAgentMetadata`; what Sec-CH-UA* headers and navigator.userAgentData report. */
+export interface PreviewUserAgentMetadata {
+  readonly brands: ReadonlyArray<UserAgentBrand>;
+  readonly fullVersionList: ReadonlyArray<UserAgentBrand>;
+  readonly platform: string;
+  readonly platformVersion: string;
+  readonly architecture: string;
+  readonly bitness: string;
+  readonly model: string;
+  readonly mobile: boolean;
+  readonly wow64: boolean;
 }
 
 const hostChromePlatform = (platform: NodeJS.Platform): ChromePlatform =>
   platform === "darwin" ? "macos" : platform === "win32" ? "windows" : "linux";
+
+const CHROME_PLATFORM_NAMES = { macos: "macOS", windows: "Windows", linux: "Linux" } as const;
+// Versions a real Chrome on that system reports when this host is a different system.
+const FOREIGN_PLATFORM_VERSIONS = { macos: "15.0.0", windows: "10.0.0", linux: "" } as const;
+// Chromium's GREASE brand for the current engine, as Electron already reports it.
+const GREASE_BRAND = { brand: "Not?A_Brand", version: "24" } as const;
+
+const presetChromePlatform = (
+  preset: PreviewUserAgentSettings["browserUserAgentPreset"],
+  host: NodeJS.Platform,
+): ChromePlatform | null => {
+  switch (preset) {
+    case "chrome":
+      return hostChromePlatform(host);
+    case "chrome-macos":
+      return "macos";
+    case "chrome-windows":
+      return "windows";
+    case "chrome-linux":
+      return "linux";
+    case "native":
+    case "custom":
+      return null;
+  }
+};
 
 // Chrome's reduced User-Agent: only the major version is real, the rest is frozen at 0.0.0.
 const chromeUserAgent = (platform: ChromePlatform, major: string): string =>
@@ -50,3 +96,41 @@ export const resolvePreviewUserAgent = (
       return chromeUserAgent("linux", major);
   }
 };
+
+/** Client Hints that match a Chrome preset; null for Built-in and Custom, whose browser is unknown. */
+export const resolvePreviewUserAgentMetadata = (
+  settings: PreviewUserAgentSettings,
+  engine: PreviewEngine,
+): PreviewUserAgentMetadata | null => {
+  const platform = presetChromePlatform(settings.browserUserAgentPreset, engine.platform);
+  const major = engine.chromeVersion.split(".")[0] ?? "";
+  if (platform === null || major === "") return null;
+  const native = platform === hostChromePlatform(engine.platform);
+  const arm = native && engine.arch.startsWith("arm");
+  return {
+    brands: [
+      GREASE_BRAND,
+      { brand: "Chromium", version: major },
+      { brand: "Google Chrome", version: major },
+    ],
+    fullVersionList: [
+      { brand: GREASE_BRAND.brand, version: `${GREASE_BRAND.version}.0.0.0` },
+      { brand: "Chromium", version: engine.chromeVersion },
+      { brand: "Google Chrome", version: engine.chromeVersion },
+    ],
+    platform: CHROME_PLATFORM_NAMES[platform],
+    platformVersion: native ? engine.systemVersion : FOREIGN_PLATFORM_VERSIONS[platform],
+    architecture: arm ? "arm" : "x86",
+    bitness: "64",
+    model: "",
+    mobile: false,
+    wow64: false,
+  };
+};
+
+/** The low-entropy Client Hints Chrome sends on every secure request. */
+export const clientHintHeaders = (metadata: PreviewUserAgentMetadata): Record<string, string> => ({
+  "sec-ch-ua": metadata.brands.map(({ brand, version }) => `"${brand}";v="${version}"`).join(", "),
+  "sec-ch-ua-mobile": metadata.mobile ? "?1" : "?0",
+  "sec-ch-ua-platform": `"${metadata.platform}"`,
+});
