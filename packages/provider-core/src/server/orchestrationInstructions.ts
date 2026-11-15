@@ -36,6 +36,18 @@ export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
 When browser work was asked, \`preview_*\` is the browser you share with the user: \`preview_status\` first, then \`preview_open\` if no tab can be automated. Prefer snapshot locators over coordinates. Switch browsers only if the tools are absent or \`preview_open\` says unsupported, the user asks, or two preview calls fail on one step. Then quote the error and switch.
 `;
 
+const T3_CODE_CORE_PREVIEW_TOOLS = [
+  "preview_status",
+  "preview_open",
+  "preview_navigate",
+  "preview_snapshot",
+  "preview_act",
+];
+
+/** Claude Code defers MCP tools behind ToolSearch, so Claude's copy says how to load them. */
+export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH = `${T3_CODE_BROWSER_TOOL_INSTRUCTIONS.trimEnd()} Load them with ToolSearch \`select:${T3_CODE_CORE_PREVIEW_TOOLS.map((tool) => `mcp__t3-code__${tool}`).join(",")}\`.
+`;
+
 const T3_CODE_DEVICE_TOOLS = ["device_list", "device_open", "device_screenshot", "device_close"];
 
 const deviceToolInstructions = (loadTools: string) => `## T3 Code devices
