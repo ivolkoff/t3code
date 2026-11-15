@@ -183,6 +183,7 @@ import { isPreviewAvailableFor } from "../browser/previewRuntime";
 import {
   isBrowserPreviewFile,
   openFileInPreview,
+  openFileInSystemBrowser,
   openUrlInPreview,
   BrowserPreviewUnavailableError,
   isBrowserSettingsReadError,
@@ -756,6 +757,29 @@ function useChatMarkdownState({
       openPreview,
     });
   };
+  const openMarkdownFileInSystemBrowser = (path: string) => {
+    const preparedConnection = threadRef ? readPreparedConnection(threadRef.environmentId) : null;
+    const api = readLocalApi();
+    if (!threadRef || preparedConnection === null || !api) {
+      return Promise.resolve(
+        AsyncResult.failure<void, BrowserPreviewUnavailableError>(
+          Cause.fail(
+            new BrowserPreviewUnavailableError({
+              message: "Environment is not connected.",
+            }),
+          ),
+        ),
+      );
+    }
+    return openFileInSystemBrowser({
+      threadRef,
+      filePath: path,
+      workspaceRoot: cwd,
+      httpBaseUrl: preparedConnection.httpBaseUrl,
+      createAssetUrl,
+      openExternal: api.shell.openExternal,
+    });
+  };
   const findWorkspaceFileMatch = async (fileLinkMeta: MarkdownFileLinkMeta) => {
     const workspaceRelativePath = fileLinkMeta.workspaceLookupPath;
     if (
@@ -894,6 +918,11 @@ function useChatMarkdownState({
           isPreviewAvailableFor(threadRef.environmentId) &&
           isBrowserPreviewFile(fileLinkMeta.filePath)
             ? () => openMarkdownFileInPreview(fileLinkMeta.filePath)
+            : undefined
+        }
+        onOpenInSystemBrowser={
+          threadRef && isBrowserPreviewFile(fileLinkMeta.filePath)
+            ? () => openMarkdownFileInSystemBrowser(fileLinkMeta.filePath)
             : undefined
         }
       />
