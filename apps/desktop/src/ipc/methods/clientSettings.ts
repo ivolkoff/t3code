@@ -4,6 +4,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as BrowserSession from "../../preview/BrowserSession.ts";
+import * as PreviewManager from "../../preview/Manager.ts";
 import * as DesktopClientSettings from "../../settings/DesktopClientSettings.ts";
 import * as DesktopSnapShot from "../../snapShot/DesktopSnapShot.ts";
 import * as IpcChannels from "../channels.ts";
@@ -30,5 +31,6 @@ export const setClientSettings = DesktopIpc.makeIpcMethod({
     yield* clientSettings.set(settings);
     yield* snapShot.configure(settings);
     yield* browserSession.setUserAgent(settings);
+    yield* (yield* PreviewManager.PreviewManager).refreshUserAgent();
   }),
 });
