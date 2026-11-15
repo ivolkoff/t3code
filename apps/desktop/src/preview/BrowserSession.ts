@@ -1,6 +1,6 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import type { Certificate, Session, WebContents } from "electron";
-import { BrowserWindow, session } from "electron";
+import { BrowserWindow, session, webContents as electronWebContents } from "electron";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Digest from "effect/crypto/Digest";
@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Result from "effect/Result";
@@ -17,6 +18,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
+import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 
 const PREVIEW_PARTITION_PREFIX = "persist:t3code-preview-";
 /** Ephemeral partitions omit persist: but retain a product prefix so the webview gate recognizes them. */
@@ -226,6 +228,8 @@ export class BrowserSession extends Context.Service<
     readonly clearCache: (
       partitions?: ReadonlyArray<string>,
     ) => Effect.Effect<void, BrowserSessionCacheClearError>;
+    /** Empty restores the native User-Agent. Open tabs send the new one from their next request. */
+    readonly setUserAgent: (userAgent: string) => Effect.Effect<void>;
   }
 >()("@t3tools/desktop/preview/BrowserSession") {}
 
@@ -554,6 +558,27 @@ export const make = Effect.gen(function* BrowserSessionMake() {
   });
 
   const sessionsRef = yield* SynchronizedRef.make<ReadonlyMap<string, Session>>(new Map());
+  // Turnstile rejects rewritten User-Agents, so the override is opt-in through client settings.
+  const clientSettings = yield* Effect.serviceOption(DesktopClientSettings.DesktopClientSettings);
+  let userAgentOverride = yield* Option.match(clientSettings, {
+    onNone: () => Effect.succeed(""),
+    onSome: (store) =>
+      store.get.pipe(
+        Effect.map(Option.match({ onNone: () => "", onSome: (s) => s.browserUserAgent.trim() })),
+        Effect.orElseSucceed(() => ""),
+      ),
+  });
+  const nativeUserAgents = new WeakMap<Session, string>();
+  const applyUserAgent = (browserSession: Session): void => {
+    const userAgent = userAgentOverride || nativeUserAgents.get(browserSession);
+    if (userAgent === undefined) return;
+    browserSession.setUserAgent(userAgent);
+    for (const contents of electronWebContents.getAllWebContents()) {
+      if (contents.session === browserSession && !contents.isDestroyed()) {
+        contents.setUserAgent(userAgent);
+      }
+    }
+  };
 
   const getPartition = Effect.fn("BrowserSession.getPartition")(function* (
     scope = "shared",
@@ -585,6 +610,8 @@ export const make = Effect.gen(function* BrowserSessionMake() {
       return Effect.try({
         try: () => {
           const browserSession = session.fromPartition(partition);
+          nativeUserAgents.set(browserSession, browserSession.getUserAgent());
+          if (userAgentOverride) applyUserAgent(browserSession);
           // Like Chrome, clipboard reads ask once per origin; both answers last for the session.
           const clipboardReadDecisions = new Map<string, boolean>();
           const confirmClipboardRead = (
@@ -737,6 +764,13 @@ export const make = Effect.gen(function* BrowserSessionMake() {
           }),
         { concurrency: "unbounded", discard: true },
       );
+    }),
+    setUserAgent: Effect.fn("BrowserSession.setUserAgent")(function* (userAgent) {
+      const next = userAgent.trim();
+      if (next === userAgentOverride) return;
+      userAgentOverride = next;
+      const sessions = yield* SynchronizedRef.get(sessionsRef);
+      for (const browserSession of sessions.values()) applyUserAgent(browserSession);
     }),
   });
 }).pipe(Effect.withSpan("BrowserSession.make"));

@@ -334,6 +334,11 @@ export const BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH = 2048;
 export const BrowserCustomSearchUrl = Schema.String.check(
   Schema.isMaxLength(BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH),
 );
+export const BROWSER_USER_AGENT_MAX_LENGTH = 1024;
+/** Empty keeps the native preview User-Agent; anything else replaces it in every preview tab. */
+export const BrowserUserAgent = Schema.String.check(
+  Schema.isMaxLength(BROWSER_USER_AGENT_MAX_LENGTH),
+);
 
 export const LoadBalancingWeights = Schema.Record(
   TrimmedNonEmptyString,
@@ -452,6 +457,8 @@ export const ClientSettingsSchema = Schema.Struct({
   browserCustomSearchUrl: BrowserCustomSearchUrl.pipe(
     Schema.withDecodingDefault(Effect.succeed("")),
   ),
+
+  browserUserAgent: BrowserUserAgent.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 
   browserAutoShowFloatingPreview: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW)),
@@ -2051,6 +2058,7 @@ export const ClientSettingsPatch = Schema.Struct({
   browserLinkTarget: Schema.optionalKey(BrowserLinkTarget),
   browserSearchEngine: Schema.optionalKey(BrowserSearchEngine),
   browserCustomSearchUrl: Schema.optionalKey(BrowserCustomSearchUrl),
+  browserUserAgent: Schema.optionalKey(BrowserUserAgent),
   browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
   browserProfiles: Schema.optionalKey(Schema.Array(BrowserProfile)),
   browserDefaultProfileId: Schema.optionalKey(BrowserProfileId),
