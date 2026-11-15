@@ -11,6 +11,7 @@ import * as browserDefaults from "~/browser/browserDefaults";
 import {
   BrowserSettingsReadError,
   openFileInPreview,
+  openFileInSystemBrowser,
   openUrlInPreview,
 } from "~/browser/openFileInPreview";
 import * as previewRuntime from "~/browser/previewRuntime";
@@ -140,6 +141,25 @@ describe("openUrlInPreview from a link", () => {
       ).toBe("preview");
     },
   );
+
+  it("opens a file in the system browser through its asset URL, not file://", async () => {
+    const openExternal = vi.fn(async (_url: string) => undefined);
+
+    const result = await openFileInSystemBrowser({
+      threadRef,
+      filePath: "/repo/picks.html",
+      workspaceRoot: "/repo",
+      httpBaseUrl: "http://localhost:3000",
+      createAssetUrl: async () =>
+        AsyncResult.success({ relativeUrl: "/assets/picks.html?sig=1", expiresAt: 0 }),
+      openExternal,
+    });
+
+    expect(result._tag).toBe("Success");
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+      "http://localhost:3000/assets/picks.html?sig=1",
+    );
+  });
 
   // regression: #16961 a background link open switched the active preview tab
   it("keeps the current tab active for a background open", async () => {
