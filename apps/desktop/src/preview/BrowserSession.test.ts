@@ -160,25 +160,26 @@ describe("BrowserSession", () => {
       // Teams redirects Electron to an error page before sign-in; every other host sees the native one.
       const calls = browserSession.webRequest.onBeforeSendHeaders.mock.calls;
       assert.strictEqual(calls.length, 1);
-      const [filter, listener] = calls[0] ?? [];
-      assert.deepStrictEqual(filter, {
-        urls: ["https://teams.cloud.microsoft/*", "https://teams.microsoft.com/*"],
-      });
-      const send = (requestHeaders: Record<string, string>) => {
+      const [listener] = calls[0] ?? [];
+      const send = (url: string, requestHeaders: Record<string, string>) => {
         let response: { requestHeaders?: Record<string, string> } | undefined;
-        listener({ requestHeaders }, (next: typeof response) => {
+        listener({ url, requestHeaders }, (next: typeof response) => {
           response = next;
         });
         return response;
       };
       for (const key of ["User-Agent", "user-agent"]) {
         const requestHeaders = { [key]: nativeUserAgent, Accept: "*/*" };
-        assert.deepStrictEqual(send(requestHeaders), {
+        assert.deepStrictEqual(send("https://teams.microsoft.com/v2/", requestHeaders), {
           requestHeaders: { [key]: teamsUserAgent, Accept: "*/*" },
         });
         assert.strictEqual(requestHeaders[key], nativeUserAgent);
       }
-      assert.deepStrictEqual(send({ Accept: "*/*" }), {});
+      assert.deepStrictEqual(send("https://teams.microsoft.com/v2/", { Accept: "*/*" }), {});
+      assert.deepStrictEqual(
+        send("https://example.com/", { "User-Agent": nativeUserAgent, Accept: "*/*" }),
+        {},
+      );
     }).pipe(Effect.provide(layer)),
   );
 
@@ -406,4 +407,50 @@ describe("BrowserSession", () => {
       assert.strictEqual(vi.mocked(other.clearStorageData).mock.calls.length, 0);
     }).pipe(Effect.provide(layer)),
   );
+
+  it.effect("adds Chrome Client Hints to secure requests that lack them", () => {
+    const layerChrome = BrowserSession.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          layerDialog,
+          DesktopClientSettings.layerTest(
+            Option.some(decodeClientSettings({ browserUserAgentPreset: "chrome" })),
+          ),
+        ),
+      ),
+    );
+    const descriptor = Object.getOwnPropertyDescriptor(process.versions, "chrome");
+    Object.defineProperty(process.versions, "chrome", { value: "152.0.1.2", configurable: true });
+    return Effect.gen(function* () {
+      const browserSessions = yield* BrowserSession.BrowserSession;
+      const partition = yield* browserSessions.getPartition("scope-a");
+      yield* browserSessions.getSession("scope-a");
+      const [listener] =
+        sessions.get(partition)?.webRequest.onBeforeSendHeaders.mock.calls[0] ?? [];
+      const send = (url: string, requestHeaders: Record<string, string>) => {
+        let response: { requestHeaders?: Record<string, string> } | undefined;
+        listener({ url, requestHeaders }, (next: typeof response) => {
+          response = next;
+        });
+        return response;
+      };
+
+      assert.deepInclude(send("https://example.com/", { Accept: "*/*" })?.requestHeaders, {
+        "sec-ch-ua": '"Not?A_Brand";v="24", "Chromium";v="152", "Google Chrome";v="152"',
+        "sec-ch-ua-mobile": "?0",
+      });
+      assert.deepStrictEqual(send("https://example.com/", { "Sec-CH-UA": "kept" }), {});
+      assert.deepStrictEqual(send("http://example.com/", { Accept: "*/*" }), {});
+    }).pipe(
+      Effect.provide(layerChrome),
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (descriptor) Object.defineProperty(process.versions, "chrome", descriptor);
+          else Reflect.deleteProperty(process.versions, "chrome");
+        }),
+      ),
+    );
+  });
 });
