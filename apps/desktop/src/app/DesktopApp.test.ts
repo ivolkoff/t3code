@@ -72,6 +72,7 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as MacPermissions from "../permissions/MacPermissions.ts";
+import * as BrowserSession from "../preview/BrowserSession.ts";
 import * as LoopbackTunnel from "../preview/LoopbackTunnel.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 
@@ -165,6 +166,10 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
         Effect.provideService(DesktopSnapShot.DesktopSnapShot, {
           initialize: Effect.void,
         } as DesktopSnapShot.DesktopSnapShot["Service"]),
+        Effect.provideService(
+          BrowserSession.BrowserSession,
+          {} as BrowserSession.BrowserSession["Service"],
+        ),
         Effect.provideService(DesktopState.DesktopState, {
           quitting,
         } as DesktopState.DesktopState["Service"]),
