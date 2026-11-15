@@ -1111,6 +1111,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["address bar duckduckgo google bing brave kagi ecosia custom url"],
   },
   {
+    id: "browser-user-agent",
+    title: "User agent",
+    to: "/settings/browser",
+    searchTerms: [
+      "ua useragent preset chrome windows macos linux electron bot blocked captcha antibot fingerprint",
+    ],
+  },
+  {
     id: "pull-request-links-open-in-app",
     title: "Open pull requests in T3 Code",
     to: "/settings/diffs",
