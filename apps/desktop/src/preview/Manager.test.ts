@@ -208,6 +208,7 @@ const layerBrowserSession = Layer.succeed(
     cookiesCleared: () => Effect.void,
     clearCache: () => Effect.void,
     setUserAgent: () => Effect.void,
+    userAgentMetadata: Effect.succeed(null),
   }),
 );
 

@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 
 import { applyLanguage } from "../../i18n/messages.ts";
 import * as BrowserSession from "../../preview/BrowserSession.ts";
+import * as PreviewManager from "../../preview/Manager.ts";
 import * as DesktopClientSettings from "../../settings/DesktopClientSettings.ts";
 import * as DesktopSnapShot from "../../snapShot/DesktopSnapShot.ts";
 import * as IpcChannels from "../channels.ts";
@@ -32,5 +33,6 @@ export const setClientSettings = DesktopIpc.makeIpcMethod({
     yield* snapShot.configure(settings);
     yield* applyLanguage(settings.language);
     yield* browserSession.setUserAgent(settings);
+    yield* (yield* PreviewManager.PreviewManager).refreshUserAgent();
   }),
 });

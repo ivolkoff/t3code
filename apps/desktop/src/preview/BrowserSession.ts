@@ -21,7 +21,13 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import { m } from "../i18n/messages.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
-import { type PreviewUserAgentSettings, resolvePreviewUserAgent } from "./previewUserAgent.ts";
+import {
+  clientHintHeaders,
+  type PreviewUserAgentMetadata,
+  type PreviewUserAgentSettings,
+  resolvePreviewUserAgent,
+  resolvePreviewUserAgentMetadata,
+} from "./previewUserAgent.ts";
 
 const PREVIEW_PARTITION_PREFIX = "persist:t3code-preview-";
 /** Ephemeral partitions omit persist: but retain a product prefix so the webview gate recognizes them. */
@@ -67,7 +73,8 @@ const externalProtocolPromptUrl = (rawUrl: string | undefined): string | null =>
 };
 
 // Teams sends Electron User-Agents to an error page before sign-in. Electron allows one listener per session.
-const TEAMS_URL_PATTERNS = ["https://teams.cloud.microsoft/*", "https://teams.microsoft.com/*"];
+const TEAMS_URL_PREFIXES = ["https://teams.cloud.microsoft/", "https://teams.microsoft.com/"];
+const isTeamsUrl = (url: string) => TEAMS_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
 
 const MAX_PROMPT_URL_LENGTH = 300;
 
@@ -232,6 +239,11 @@ export class BrowserSession extends Context.Service<
     ) => Effect.Effect<void, BrowserSessionCacheClearError>;
     /** Open tabs send the resolved User-Agent from their next request. */
     readonly setUserAgent: (settings: PreviewUserAgentSettings) => Effect.Effect<void>;
+    /** Client Hints for the current Chrome preset; null when the preset has none. */
+    readonly userAgentMetadata: Effect.Effect<{
+      readonly userAgent: string;
+      readonly metadata: PreviewUserAgentMetadata;
+    } | null>;
   }
 >()("@t3tools/desktop/preview/BrowserSession") {}
 
@@ -584,20 +596,21 @@ export const make = Effect.gen(function* BrowserSessionMake() {
   const engine = {
     chromeVersion: process.versions.chrome ?? "",
     platform: yield* HostProcess.Platform,
+    arch: yield* HostProcess.Architecture,
+    systemVersion: process.getSystemVersion?.() ?? "",
   };
   const clientSettings = yield* Effect.serviceOption(DesktopClientSettings.DesktopClientSettings);
-  let userAgentOverride = yield* Option.match(clientSettings, {
-    onNone: () => Effect.succeed(""),
-    onSome: (store) =>
-      store.get.pipe(
-        Effect.map(
-          Option.match({
-            onNone: () => "",
-            onSome: (settings) => resolvePreviewUserAgent(settings, engine),
-          }),
-        ),
-        Effect.orElseSucceed(() => ""),
-      ),
+  const initialSettings = yield* Option.match(clientSettings, {
+    onNone: () => Effect.succeedNone,
+    onSome: (store) => store.get.pipe(Effect.orElseSucceed(() => Option.none())),
+  });
+  let userAgentOverride = Option.match(initialSettings, {
+    onNone: () => "",
+    onSome: (settings) => resolvePreviewUserAgent(settings, engine),
+  });
+  let userAgentMetadata = Option.match(initialSettings, {
+    onNone: () => null,
+    onSome: (settings) => resolvePreviewUserAgentMetadata(settings, engine),
   });
   const nativeUserAgents = new WeakMap<Session, string>();
   const applyUserAgent = (browserSession: Session): void => {
@@ -717,22 +730,27 @@ export const make = Effect.gen(function* BrowserSessionMake() {
                 true
               : ALLOWED_PREVIEW_PERMISSIONS.has(permission),
           );
-          browserSession.webRequest.onBeforeSendHeaders(
-            { urls: TEAMS_URL_PATTERNS },
-            ({ requestHeaders }, callback) => {
-              const userAgent = Object.entries(requestHeaders).find(
-                ([name]) => name.toLowerCase() === "user-agent",
-              );
-              if (userAgent === undefined) {
-                callback({});
-                return;
-              }
-              const [name, value] = userAgent;
-              callback({
-                requestHeaders: { ...requestHeaders, [name]: value.replace(/ Electron\/\S+/, "") },
-              });
-            },
-          );
+          browserSession.webRequest.onBeforeSendHeaders(({ url, requestHeaders }, callback) => {
+            const headers = { ...requestHeaders };
+            const headerName = (wanted: string) =>
+              Object.keys(headers).find((name) => name.toLowerCase() === wanted);
+            let changed = false;
+            const userAgentHeader = headerName("user-agent");
+            if (userAgentHeader !== undefined && isTeamsUrl(url)) {
+              headers[userAgentHeader] = headers[userAgentHeader]!.replace(/ Electron\/\S+/, "");
+              changed = true;
+            }
+            // Navigations take the session User-Agent, which carries no Client Hints.
+            if (
+              userAgentMetadata !== null &&
+              url.startsWith("https://") &&
+              headerName("sec-ch-ua") === undefined
+            ) {
+              Object.assign(headers, clientHintHeaders(userAgentMetadata));
+              changed = true;
+            }
+            callback(changed ? { requestHeaders: headers } : {});
+          });
           return browserSession;
         },
         catch: (cause) =>
@@ -814,7 +832,13 @@ export const make = Effect.gen(function* BrowserSessionMake() {
         { concurrency: "unbounded", discard: true },
       );
     }),
+    userAgentMetadata: Effect.sync(() =>
+      userAgentMetadata === null
+        ? null
+        : { userAgent: userAgentOverride, metadata: userAgentMetadata },
+    ),
     setUserAgent: Effect.fn("BrowserSession.setUserAgent")(function* (settings) {
+      userAgentMetadata = resolvePreviewUserAgentMetadata(settings, engine);
       const next = resolvePreviewUserAgent(settings, engine);
       if (next === userAgentOverride) return;
       userAgentOverride = next;
