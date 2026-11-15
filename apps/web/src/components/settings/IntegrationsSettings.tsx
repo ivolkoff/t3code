@@ -11,6 +11,7 @@ import {
   type BrowserProfile,
   BrowserSearchEngine,
   BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH,
+  BROWSER_USER_AGENT_MAX_LENGTH,
   type EnvironmentId,
   BROWSER_PROFILE_NAME_MAX_LENGTH,
   BROWSER_RECORDING_FRAME_RATES,
@@ -775,6 +776,41 @@ function BrowserSearchEngineSetting() {
         />
       ) : null}
     </>
+  );
+}
+
+function BrowserUserAgentSetting({ disabled }: { readonly disabled: boolean }) {
+  const userAgent = useClientSettings((settings) => settings.browserUserAgent);
+  const updateSettings = useUpdatePrimarySettings();
+
+  return (
+    <SettingsRow
+      {...searchableSetting("browser-user-agent")}
+      description="Replaces the User-Agent of every browser tab, including what pages read from navigator.userAgent. Leave empty to keep the built-in one; Cloudflare Turnstile may reject a replaced value."
+      resetAction={
+        userAgent !== "" ? (
+          <SettingResetButton
+            label="user agent"
+            onClick={() => updateSettings({ browserUserAgent: "" })}
+          />
+        ) : null
+      }
+      control={
+        <DraftInput
+          nativeInput
+          size="sm"
+          className="w-full sm:w-64"
+          aria-label="User agent"
+          placeholder="Built-in"
+          autoCapitalize="none"
+          spellCheck={false}
+          disabled={disabled}
+          maxLength={BROWSER_USER_AGENT_MAX_LENGTH}
+          value={userAgent}
+          onCommit={(next) => updateSettings({ browserUserAgent: next.trim() })}
+        />
+      }
+    />
   );
 }
 
@@ -1590,6 +1626,7 @@ export function BrowserSettingsPanel() {
           <BrowserProfilesSetting disabled={desktopOnly} />
           <BrowserLinkTargetSetting disabled={desktopOnly} />
           <BrowserAutoShowFloatingPreviewSetting disabled={desktopOnly} />
+          <BrowserUserAgentSetting disabled={desktopOnly} />
         </SettingsUnavailableGroup>
         {/* Not desktop-only: web clients search from server-run browser tabs too. */}
         <BrowserSearchEngineSetting />

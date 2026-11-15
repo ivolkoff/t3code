@@ -21,8 +21,9 @@ const { fromPartition, sessions } = vi.hoisted(() => ({
   >(),
 }));
 
-const { fromWebContents } = vi.hoisted(() => ({
+const { fromWebContents, getAllWebContents } = vi.hoisted(() => ({
   fromWebContents: vi.fn<(webContents: unknown) => unknown>(() => null),
+  getAllWebContents: vi.fn<() => unknown[]>(() => []),
 }));
 
 vi.mock("electron", () => ({
@@ -30,9 +31,15 @@ vi.mock("electron", () => ({
   session: {
     fromPartition,
   },
+  webContents: { getAllWebContents },
 }));
 
+import { ClientSettingsSchema } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
+import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as BrowserSession from "./BrowserSession.ts";
 
 const { showMessageBox } = vi.hoisted(() => ({
@@ -47,6 +54,7 @@ const layerDialog = Layer.succeed(ElectronDialog.ElectronDialog, {
     Effect.sync(() => ({ response: showMessageBox(options, owner), checkboxChecked: false })),
   showErrorBox: () => Effect.void,
 });
+const decodeClientSettings = Schema.decodeSync(ClientSettingsSchema);
 const layer = BrowserSession.layer.pipe(
   Layer.provide(Layer.merge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer), layerDialog)),
 );
@@ -173,6 +181,60 @@ describe("BrowserSession", () => {
       assert.deepStrictEqual(send({ Accept: "*/*" }), {});
     }).pipe(Effect.provide(layer)),
   );
+
+  it.effect("replaces the User-Agent of sessions and open tabs with the configured one", () => {
+    const nativeUserAgent = "Mozilla/5.0 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36";
+    const configured = "Mozilla/5.0 Chrome/146.0.0.0 Safari/537.36";
+    const layerConfigured = BrowserSession.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          layerDialog,
+          DesktopClientSettings.layerTest(
+            Option.some(decodeClientSettings({ browserUserAgent: configured })),
+          ),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      fromPartition.mockReset();
+      fromPartition.mockImplementation((partition: string) => {
+        let userAgent = nativeUserAgent;
+        const browserSession = {
+          clearCache: vi.fn(() => Promise.resolve()),
+          clearStorageData: vi.fn(() => Promise.resolve()),
+          getUserAgent: vi.fn(() => userAgent),
+          setPermissionRequestHandler: vi.fn(),
+          setPermissionCheckHandler: vi.fn(),
+          setUserAgent: vi.fn((next: string) => {
+            userAgent = next;
+          }),
+          webRequest: { onBeforeSendHeaders: vi.fn() },
+        };
+        sessions.set(partition, browserSession);
+        return browserSession;
+      });
+
+      const browserSessions = yield* BrowserSession.BrowserSession;
+      const created = yield* browserSessions.getSession("scope-a");
+      assert.strictEqual(created.getUserAgent(), configured);
+
+      const tab = { session: created, isDestroyed: () => false, setUserAgent: vi.fn() };
+      const otherTab = { session: {}, isDestroyed: () => false, setUserAgent: vi.fn() };
+      getAllWebContents.mockReturnValue([tab, otherTab]);
+
+      yield* browserSessions.setUserAgent("  ");
+      assert.strictEqual(created.getUserAgent(), nativeUserAgent);
+      assert.deepStrictEqual(tab.setUserAgent.mock.calls, [[nativeUserAgent]]);
+      assert.strictEqual(otherTab.setUserAgent.mock.calls.length, 0);
+
+      yield* browserSessions.setUserAgent(configured);
+      assert.strictEqual(created.getUserAgent(), configured);
+      assert.deepStrictEqual(tab.setUserAgent.mock.calls.at(-1), [configured]);
+      getAllWebContents.mockReturnValue([]);
+    }).pipe(Effect.provide(layerConfigured));
+  });
 
   it.effect("grants preview permissions through both the request and check handlers", () =>
     Effect.gen(function* () {
