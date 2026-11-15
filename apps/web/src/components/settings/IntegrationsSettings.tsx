@@ -12,6 +12,8 @@ import {
   BrowserSearchEngine,
   BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH,
   BROWSER_USER_AGENT_MAX_LENGTH,
+  BrowserUserAgentPreset,
+  DEFAULT_BROWSER_USER_AGENT_PRESET,
   type EnvironmentId,
   BROWSER_PROFILE_NAME_MAX_LENGTH,
   BROWSER_RECORDING_FRAME_RATES,
@@ -779,38 +781,84 @@ function BrowserSearchEngineSetting() {
   );
 }
 
+const USER_AGENT_PRESET_LABELS: Readonly<Record<BrowserUserAgentPreset, string>> = {
+  native: "Built-in",
+  chrome: "Chrome (this system)",
+  "chrome-macos": "Chrome on macOS",
+  "chrome-windows": "Chrome on Windows",
+  "chrome-linux": "Chrome on Linux",
+  custom: "Custom",
+};
+
 function BrowserUserAgentSetting({ disabled }: { readonly disabled: boolean }) {
-  const userAgent = useClientSettings((settings) => settings.browserUserAgent);
+  const preset = useClientSettings((settings) => settings.browserUserAgentPreset);
+  const customUserAgent = useClientSettings((settings) => settings.browserUserAgent);
   const updateSettings = useUpdatePrimarySettings();
 
   return (
-    <SettingsRow
-      {...searchableSetting("browser-user-agent")}
-      description="Replaces the User-Agent of every browser tab, including what pages read from navigator.userAgent. Leave empty to keep the built-in one; Cloudflare Turnstile may reject a replaced value."
-      resetAction={
-        userAgent !== "" ? (
-          <SettingResetButton
-            label="user agent"
-            onClick={() => updateSettings({ browserUserAgent: "" })}
-          />
-        ) : null
-      }
-      control={
-        <DraftInput
-          nativeInput
-          size="sm"
-          className="w-full sm:w-64"
-          aria-label="User agent"
-          placeholder="Built-in"
-          autoCapitalize="none"
-          spellCheck={false}
-          disabled={disabled}
-          maxLength={BROWSER_USER_AGENT_MAX_LENGTH}
-          value={userAgent}
-          onCommit={(next) => updateSettings({ browserUserAgent: next.trim() })}
+    <>
+      <SettingsRow
+        {...searchableSetting("browser-user-agent")}
+        description="What browser tabs report in requests and to page scripts. Chrome presets follow the built-in engine version across updates. Cloudflare Turnstile may reject anything but Built-in."
+        resetAction={
+          preset !== DEFAULT_BROWSER_USER_AGENT_PRESET || customUserAgent !== "" ? (
+            <SettingResetButton
+              label="user agent"
+              onClick={() =>
+                updateSettings({
+                  browserUserAgentPreset: DEFAULT_BROWSER_USER_AGENT_PRESET,
+                  browserUserAgent: "",
+                })
+              }
+            />
+          ) : null
+        }
+        control={
+          <Select
+            value={preset}
+            disabled={disabled}
+            onValueChange={(value) => {
+              const next = BrowserUserAgentPreset.literals.find((literal) => literal === value);
+              if (next !== undefined) {
+                updateSettings({ browserUserAgentPreset: next });
+              }
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="User agent">
+              <SelectValue>{USER_AGENT_PRESET_LABELS[preset]}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              {BrowserUserAgentPreset.literals.map((literal) => (
+                <SelectItem hideIndicator key={literal} value={literal}>
+                  {USER_AGENT_PRESET_LABELS[literal]}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        }
+      />
+      {preset === "custom" ? (
+        <SettingsRow
+          title="Custom user agent"
+          description="Use {chrome} where the Chrome major version goes. Empty keeps the built-in one."
+          control={
+            <DraftInput
+              nativeInput
+              size="sm"
+              className="w-full sm:w-64"
+              aria-label="Custom user agent"
+              placeholder="Mozilla/5.0 … Chrome/{chrome}.0.0.0 Safari/537.36"
+              autoCapitalize="none"
+              spellCheck={false}
+              disabled={disabled}
+              maxLength={BROWSER_USER_AGENT_MAX_LENGTH}
+              value={customUserAgent}
+              onCommit={(next) => updateSettings({ browserUserAgent: next.trim() })}
+            />
+          }
         />
-      }
-    />
+      ) : null}
+    </>
   );
 }
 

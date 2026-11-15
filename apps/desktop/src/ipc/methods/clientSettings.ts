@@ -29,6 +29,6 @@ export const setClientSettings = DesktopIpc.makeIpcMethod({
     const browserSession = yield* BrowserSession.BrowserSession;
     yield* clientSettings.set(settings);
     yield* snapShot.configure(settings);
-    yield* browserSession.setUserAgent(settings.browserUserAgent);
+    yield* browserSession.setUserAgent(settings);
   }),
 });

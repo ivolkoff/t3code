@@ -328,8 +328,22 @@ export const BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH = 2048;
 export const BrowserCustomSearchUrl = Schema.String.check(
   Schema.isMaxLength(BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH),
 );
+/**
+ * "native" keeps the preview's own User-Agent. Chrome presets take the Chrome version from the
+ * running engine, so they follow app updates. "custom" uses `browserUserAgent`.
+ */
+export const BrowserUserAgentPreset = Schema.Literals([
+  "native",
+  "chrome",
+  "chrome-macos",
+  "chrome-windows",
+  "chrome-linux",
+  "custom",
+]);
+export type BrowserUserAgentPreset = typeof BrowserUserAgentPreset.Type;
+export const DEFAULT_BROWSER_USER_AGENT_PRESET: BrowserUserAgentPreset = "native";
 export const BROWSER_USER_AGENT_MAX_LENGTH = 1024;
-/** Empty keeps the native preview User-Agent; anything else replaces it in every preview tab. */
+/** `{chrome}` is replaced with the engine's Chrome major version. */
 export const BrowserUserAgent = Schema.String.check(
   Schema.isMaxLength(BROWSER_USER_AGENT_MAX_LENGTH),
 );
@@ -446,6 +460,11 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed("")),
   ),
 
+  browserUserAgentPreset: BrowserUserAgentPreset.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_USER_AGENT_PRESET)),
+  ),
+
+  // Kept when the preset is switched away from "custom" so switching back restores it.
   browserUserAgent: BrowserUserAgent.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 
   browserAutoShowFloatingPreview: Schema.Boolean.pipe(
@@ -2006,6 +2025,7 @@ export const ClientSettingsPatch = Schema.Struct({
   browserLinkTarget: Schema.optionalKey(BrowserLinkTarget),
   browserSearchEngine: Schema.optionalKey(BrowserSearchEngine),
   browserCustomSearchUrl: Schema.optionalKey(BrowserCustomSearchUrl),
+  browserUserAgentPreset: Schema.optionalKey(BrowserUserAgentPreset),
   browserUserAgent: Schema.optionalKey(BrowserUserAgent),
   browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
   browserProfiles: Schema.optionalKey(Schema.Array(BrowserProfile)),

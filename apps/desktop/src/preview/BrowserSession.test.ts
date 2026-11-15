@@ -192,7 +192,12 @@ describe("BrowserSession", () => {
           NodeCrypto.layer,
           layerDialog,
           DesktopClientSettings.layerTest(
-            Option.some(decodeClientSettings({ browserUserAgent: configured })),
+            Option.some(
+              decodeClientSettings({
+                browserUserAgentPreset: "custom",
+                browserUserAgent: configured,
+              }),
+            ),
           ),
         ),
       ),
@@ -224,12 +229,18 @@ describe("BrowserSession", () => {
       const otherTab = { session: {}, isDestroyed: () => false, setUserAgent: vi.fn() };
       getAllWebContents.mockReturnValue([tab, otherTab]);
 
-      yield* browserSessions.setUserAgent("  ");
+      yield* browserSessions.setUserAgent({
+        browserUserAgentPreset: "native",
+        browserUserAgent: configured,
+      });
       assert.strictEqual(created.getUserAgent(), nativeUserAgent);
       assert.deepStrictEqual(tab.setUserAgent.mock.calls, [[nativeUserAgent]]);
       assert.strictEqual(otherTab.setUserAgent.mock.calls.length, 0);
 
-      yield* browserSessions.setUserAgent(configured);
+      yield* browserSessions.setUserAgent({
+        browserUserAgentPreset: "custom",
+        browserUserAgent: configured,
+      });
       assert.strictEqual(created.getUserAgent(), configured);
       assert.deepStrictEqual(tab.setUserAgent.mock.calls.at(-1), [configured]);
       getAllWebContents.mockReturnValue([]);
