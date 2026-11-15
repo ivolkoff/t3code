@@ -85,7 +85,10 @@ import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { WorkflowAgentTranscriptReadObserver } from "../workflowAgentTranscript.ts";
 import * as ServerConfig from "../../config.ts";
 import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
-import { T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH } from "@t3tools/provider-core/server/orchestrationInstructions";
+import {
+  T3_CODE_BROWSER_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
+  T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
+} from "@t3tools/provider-core/server/orchestrationInstructions";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import { PreviewControlsToolkit } from "../../mcp/toolkits/previewControls/tools.ts";
 import { HtmlToolkit } from "../../mcp/toolkits/html/tools.ts";
@@ -714,6 +717,30 @@ describe("ClaudeAdapterV2 device instructions", () => {
     const text = append({ mcp: true, deviceToolsAvailable: true });
     assert.include(text, T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH);
     assert.include(text, "Use `delegate_task`");
+  });
+
+  it("gives a session with preview access the shared-browser block and the ToolSearch line", () => {
+    const withPreview = (mcp: boolean, browserToolsAvailable: boolean) =>
+      (
+        ClaudeAdapterV2.makeClaudeQueryOptions({
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("claudeAgent"),
+            model: "claude-opus-5-5",
+          },
+          nativeThreadId: "native-thread-claude-browser",
+          resume: false,
+          cwd: "/workspace",
+          ...(mcp
+            ? { mcpServers: { "t3-code": { type: "http" as const, url: "http://127.0.0.1/mcp" } } }
+            : {}),
+          browserToolsAvailable,
+          environment: {},
+        }).systemPrompt as { readonly append?: string }
+      ).append ?? "";
+    assert.include(withPreview(true, true), T3_CODE_BROWSER_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH);
+    assert.include(withPreview(true, true), "select:mcp__t3-code__preview_status,");
+    assert.notInclude(withPreview(true, false), "## T3 Code browser");
+    assert.notInclude(withPreview(false, true), "## T3 Code browser");
   });
 
   it("leaves the device block out without device access or without T3 tools", () => {
