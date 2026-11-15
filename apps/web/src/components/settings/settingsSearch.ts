@@ -1173,9 +1173,13 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "browser-user-agent",
-    title: "User agent",
+    title: msg("User agent"),
     to: "/settings/browser",
-    searchTerms: ["ua useragent chrome electron bot blocked captcha antibot fingerprint"],
+    searchTerms: [
+      msg(
+        "ua useragent preset chrome windows macos linux electron bot blocked captcha antibot fingerprint",
+      ),
+    ],
   },
   {
     id: "pull-request-links-open-in-app",

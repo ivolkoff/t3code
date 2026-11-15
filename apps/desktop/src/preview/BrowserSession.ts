@@ -21,6 +21,7 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import { m } from "../i18n/messages.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
+import { type PreviewUserAgentSettings, resolvePreviewUserAgent } from "./previewUserAgent.ts";
 
 const PREVIEW_PARTITION_PREFIX = "persist:t3code-preview-";
 /** Ephemeral partitions omit persist: but retain a product prefix so the webview gate recognizes them. */
@@ -229,8 +230,8 @@ export class BrowserSession extends Context.Service<
     readonly clearCache: (
       partitions?: ReadonlyArray<string>,
     ) => Effect.Effect<void, BrowserSessionCacheClearError>;
-    /** Empty restores the native User-Agent. Open tabs send the new one from their next request. */
-    readonly setUserAgent: (userAgent: string) => Effect.Effect<void>;
+    /** Open tabs send the resolved User-Agent from their next request. */
+    readonly setUserAgent: (settings: PreviewUserAgentSettings) => Effect.Effect<void>;
   }
 >()("@t3tools/desktop/preview/BrowserSession") {}
 
@@ -580,12 +581,21 @@ export const make = Effect.gen(function* BrowserSessionMake() {
 
   const sessionsRef = yield* SynchronizedRef.make<ReadonlyMap<string, Session>>(new Map());
   // Turnstile rejects rewritten User-Agents, so the override is opt-in through client settings.
+  const engine = {
+    chromeVersion: process.versions.chrome ?? "",
+    platform: yield* HostProcess.Platform,
+  };
   const clientSettings = yield* Effect.serviceOption(DesktopClientSettings.DesktopClientSettings);
   let userAgentOverride = yield* Option.match(clientSettings, {
     onNone: () => Effect.succeed(""),
     onSome: (store) =>
       store.get.pipe(
-        Effect.map(Option.match({ onNone: () => "", onSome: (s) => s.browserUserAgent.trim() })),
+        Effect.map(
+          Option.match({
+            onNone: () => "",
+            onSome: (settings) => resolvePreviewUserAgent(settings, engine),
+          }),
+        ),
         Effect.orElseSucceed(() => ""),
       ),
   });
@@ -804,8 +814,8 @@ export const make = Effect.gen(function* BrowserSessionMake() {
         { concurrency: "unbounded", discard: true },
       );
     }),
-    setUserAgent: Effect.fn("BrowserSession.setUserAgent")(function* (userAgent) {
-      const next = userAgent.trim();
+    setUserAgent: Effect.fn("BrowserSession.setUserAgent")(function* (settings) {
+      const next = resolvePreviewUserAgent(settings, engine);
       if (next === userAgentOverride) return;
       userAgentOverride = next;
       const sessions = yield* SynchronizedRef.get(sessionsRef);
