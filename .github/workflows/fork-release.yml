@@ -93,7 +93,8 @@ jobs:
       - name: Build desktop artifact
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          VERSION: ${{ inputs.version }}
+          # The updater only offers a strictly newer version, so every build gets its own.
+          VERSION: ${{ inputs.version }}-fork.${{ github.run_number }}
         run: >-
           vp run dist:desktop:artifact
           --platform ${{ matrix.platform }}
@@ -109,6 +110,7 @@ jobs:
           path: |
             release/*.exe
             release/*.dmg
+            release/*.zip
             release/*.blockmap
             release/latest*.yml
           if-no-files-found: error
@@ -137,6 +139,5 @@ jobs:
           tag="fork-v${VERSION}-${GITHUB_RUN_NUMBER}"
           gh release create "$tag" dist/* \
             --target "$GITHUB_SHA" \
-            --title "T3 Code ${VERSION} (fork build ${GITHUB_RUN_NUMBER})" \
-            --notes "Unsigned build of ${GITHUB_SHA::10}. Windows SmartScreen warns about an unknown publisher; on macOS run \`xattr -dr com.apple.quarantine \"/Applications/T3 Code (Beta).app\"\` after copying the app." \
-            --prerelease
+            --title "T3 Code ${VERSION}-fork.${GITHUB_RUN_NUMBER}" \
+            --notes "Unsigned build of ${GITHUB_SHA::10}. Windows SmartScreen warns about an unknown publisher; on macOS run \`xattr -dr com.apple.quarantine \"/Applications/T3 Code (Beta).app\"\` after copying the app."
