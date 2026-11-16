@@ -37,7 +37,9 @@ jobs:
             arch: x64
             rust_target: x86_64-pc-windows-msvc
           - label: macOS arm64
-            runner: macos-15
+            # GitHub's hosted macOS arm64 pool drops queued jobs (Nov 2026), so this
+            # builds on the maintainer's own Mac.
+            runner: [self-hosted, t3-mac]
             platform: mac
             target: dmg
             arch: arm64
@@ -50,6 +52,8 @@ jobs:
           GIT_TERMINAL_PROMPT: "0"
         run: |
           set -euo pipefail
+          # A self-hosted workspace keeps the previous run's files, release/ included.
+          find . -mindepth 1 -delete
           git init .
           git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
@@ -105,6 +109,8 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: desktop
+    # Publish whichever platforms built.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
       - name: Download desktop artifacts
