@@ -173,7 +173,7 @@ function LimitRow({
       ariaValue={gt("{left}% left", { left })}
       opensUsage
       tooltip={
-        <div className="flex w-56 flex-col gap-1">
+        <div className="flex w-max flex-col gap-1 whitespace-nowrap">
           <span className="font-medium text-foreground">{window.label}</span>
           <Row label={gt("Left", { $context: "remaining usage" })}>{left}%</Row>
           {window.resetsAt ? (

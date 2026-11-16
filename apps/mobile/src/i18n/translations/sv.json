@@ -4940,14 +4940,13 @@
       "v": "v"
     }
   ],
-  "23d0be01844d163c": [
-    "Jämn takt: ",
+  "0c01dc82abe8a727": [
+    "Even pace: ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    " % kvar vid det här laget"
+    }
   ],
   "a6ae2f414eb6349a": [
     "Återställer ",
