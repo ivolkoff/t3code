@@ -248,6 +248,17 @@ Choose **Delete now** to run the enabled rules immediately. The latest results s
 worktrees were removed or kept and why, plus any failures.
 Results also list folders in the worktree folder that no thread uses, with their sizes; cleanup never removes them, so remove them manually if you want.
 
+Open **Settings → Maintenance → Artifacts and logs** and set **Delete settled threads** to delete threads
+that have been settled, untouched and unopened, for 7, 14, 30, 90 or a custom number of days. It is off
+by default, applies to the whole machine, and is not available on mobile. It runs with the other rules and
+on **Delete now**. The thread's worktree is removed first under the safety checks above, whatever the
+worktree rules say; if the worktree is kept, for example because of uncommitted changes, the thread stays
+and the results say why. Archived threads, threads bound to a scheduled task, threads with a running
+terminal, threads with active or recently active subagents or side chats, and worktree threads in projects
+whose worktree cleanup is **Off** are kept. Archive or unsettle a thread to keep it. Deletion cannot be
+undone, so turning the rule on, shortening the period, or enabling it on another machine asks for
+confirmation. Deleted threads appear in the results.
+
 Browser captures and rotated logs have separate retention periods. Expired capture links stop
 working. Current logs, message attachments, and browser profiles are kept.
 

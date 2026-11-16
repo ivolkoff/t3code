@@ -2225,6 +2225,22 @@ export function isOlderSettledThreadShell(
   );
 }
 
+/** Epoch ms of a settled thread's last activity: settle, update, visit, open, or snooze wake. */
+export function settledThreadLastActivityMs(
+  thread: Pick<
+    OrchestrationV2ThreadShell,
+    "settledAt" | "updatedAt" | "lastVisitedAt" | "opens" | "snoozedUntil"
+  >,
+): number {
+  return Math.max(
+    DateTime.toEpochMillis(thread.updatedAt),
+    ...[thread.settledAt, thread.lastVisitedAt, thread.snoozedUntil].flatMap((at) =>
+      at == null ? [] : [DateTime.toEpochMillis(at)],
+    ),
+    thread.opens?.openedAt ?? 0,
+  );
+}
+
 export const OrchestrationV2OlderSettledCount = Schema.Struct({
   projectId: ProjectId,
   count: NonNegativeInt,
@@ -2997,6 +3013,8 @@ export const OrchestrationV2Command = Schema.Union([
     threadId: ThreadId,
     /** Delete only a thread with no runs and no messages; otherwise succeed without a change. */
     onlyIfUnused: Schema.optional(Schema.Boolean),
+    /** Automatic cleanup: delete only a thread still settled and unarchived whose last activity (settle, update, visit, open, snooze wake) is at or before this time; otherwise succeed without a change. */
+    settledBefore: Schema.optional(Schema.DateTimeUtc),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.settle"),

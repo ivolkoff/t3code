@@ -1288,7 +1288,7 @@ export function databaseReclaimMinutes(status: DatabaseStorageStatus): number {
 }
 
 export const StorageCleanupReportEntry = Schema.Struct({
-  kind: Schema.Literals(["worktree", "browser-artifacts", "logs"]),
+  kind: Schema.Literals(["worktree", "browser-artifacts", "logs", "thread"]),
   outcome: Schema.Literals(["removed", "kept", "failed"]),
   reason: Schema.String,
   path: Schema.NullOr(Schema.String),
@@ -1325,6 +1325,9 @@ export const StorageCleanupSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   logsAfterDays: StorageRetentionDays.pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  threadSettledAfterDays: StorageRetentionDays.pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
 });
 export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
@@ -1802,6 +1805,7 @@ export const ServerSettingsPatch = Schema.Struct({
       worktreeUnchanged: Schema.optionalKey(Schema.Boolean),
       browserArtifactsAfterDays: Schema.optionalKey(StorageRetentionDays),
       logsAfterDays: Schema.optionalKey(StorageRetentionDays),
+      threadSettledAfterDays: Schema.optionalKey(StorageRetentionDays),
     }),
   ),
   worktreesDirectory: Schema.optionalKey(TrimmedString),
