@@ -8,9 +8,7 @@ import {
   collectProviderUsageLimits,
   formatDuration,
   formatPaceReserve,
-  type LimitPace,
   limitsNotice,
-  paceOf,
   paceRemainingPercent,
   paceReservePercent,
   remainingPercent,
@@ -24,14 +22,9 @@ import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Row } from "../usage/UsageLimitsPooled";
 import { formatContextWindowCompactionMessage } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
-
-const PACE_LABEL: Record<LimitPace, string> = {
-  ahead: "Ahead of pace",
-  on: "On pace",
-  under: "Under pace",
-};
 
 export interface ThreadDetailsUsageInput {
   readonly providerInstanceId: ProviderInstanceId | null;
@@ -150,7 +143,7 @@ function LimitRow({
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const left = remainingPercent(window);
-  const pace = paceOf(window, now);
+  const timeLeft = paceRemainingPercent(window, now);
   const reserve = paceReservePercent(window, now);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   return (
@@ -158,27 +151,21 @@ function LimitRow({
       label={window.label}
       fill={left}
       tone={left <= 10 ? "error" : left <= 20 ? "warning" : null}
-      tick={paceRemainingPercent(window, now)}
+      tick={timeLeft}
       value={`${left}%`}
       ariaValue={`${left}% left`}
       tooltip={
-        <>
-          <span className="text-foreground">
-            {window.label}: {left}% left
-          </span>
-          {pace ? (
-            <span className="text-muted-foreground">
-              {PACE_LABEL[pace]}
-              {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`}
-            </span>
+        <div className="flex w-56 flex-col gap-1">
+          <span className="font-medium text-foreground">{window.label}</span>
+          <Row label="Left">{left}%</Row>
+          {window.resetsAt ? (
+            <Row label="Resets">
+              {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)}
+              {resetsAt > now ? ` · in ${formatDuration(resetsAt - now)}` : ""}
+            </Row>
           ) : null}
-          {window.resetsAt && resetsAt > now ? (
-            <span className="text-muted-foreground">
-              Resets {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)} · in{" "}
-              {formatDuration(resetsAt - now)}
-            </span>
-          ) : null}
-        </>
+          {reserve !== null ? <Row label="Even pace">{formatPaceReserve(reserve)}</Row> : null}
+        </div>
       }
     />
   );
