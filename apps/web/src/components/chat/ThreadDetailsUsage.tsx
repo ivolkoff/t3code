@@ -155,7 +155,7 @@ function LimitRow({
       value={`${left}%`}
       ariaValue={`${left}% left`}
       tooltip={
-        <div className="flex w-56 flex-col gap-1">
+        <div className="flex w-max flex-col gap-1 whitespace-nowrap">
           <span className="font-medium text-foreground">{window.label}</span>
           <Row label="Left">{left}%</Row>
           {window.resetsAt ? (
