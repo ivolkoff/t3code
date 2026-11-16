@@ -1,7 +1,10 @@
 import {
+  CommandId,
   GitCommandError,
+  isListedThreadLineage,
   OrchestrationV2AppThreadJson,
   OrchestrationV2ProviderSessionJson,
+  settledThreadLastActivityMs,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -41,6 +44,7 @@ import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
+import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import { threadHasQueuedTurnStart } from "./orchestration-v2/ThreadSettlementService.ts";
 import { forkParked } from "./serverActivation.ts";
 import * as Settings from "./serverSettings.ts";
@@ -156,6 +160,48 @@ function threadIdle(
     !threadHasQueuedTurnStart(thread, now) &&
     !heldForLimitRecovery(thread, now, settings)
   );
+}
+
+export function storageCleanupSettledThreadDue(
+  thread: OrchestrationV2ThreadShell,
+  now: number,
+  days: number,
+  settings: LimitRecoverySettings,
+): boolean {
+  return (
+    isListedThreadLineage(thread.lineage) &&
+    thread.settledOverride === "settled" &&
+    thread.settledAt !== null &&
+    thread.archivedAt === null &&
+    settledThreadLastActivityMs(thread) <= now - days * DAY_MS &&
+    threadIdle(thread, now, settings)
+  );
+}
+
+// Deleting a thread deletes its side chats, which the decider's guard does not inspect.
+function activeDescendantCheck(
+  threads: ReadonlyArray<OrchestrationV2ThreadShell>,
+  now: number,
+  cutoff: number,
+  settings: LimitRecoverySettings,
+) {
+  const unlistedChildren = Map.groupBy(
+    threads.filter((thread) => !isListedThreadLineage(thread.lineage)),
+    (thread) => thread.lineage.parentThreadId,
+  );
+  return (thread: OrchestrationV2ThreadShell) => {
+    const pending = [...(unlistedChildren.get(thread.id) ?? [])];
+    const seen = new Set<ThreadId>();
+    while (pending.length > 0) {
+      const child = pending.pop()!;
+      if (seen.has(child.id)) continue;
+      seen.add(child.id);
+      if (!threadIdle(child, now, settings) || settledThreadLastActivityMs(child) > cutoff)
+        return true;
+      pending.push(...(unlistedChildren.get(child.id) ?? []));
+    }
+    return false;
+  };
 }
 
 // A run held for its usage-limit reset has its work still ahead of it, and a
@@ -299,6 +345,7 @@ const make = Effect.gen(function* () {
   const engine = yield* Orchestrator.OrchestratorV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
+  const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const sql = yield* SqlClient.SqlClient;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const gitManager = yield* GitManager.GitManager;
@@ -307,6 +354,7 @@ const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const liveTerminals = new Map<string, Map<string, TerminalSummary>>();
   const orphanSizes = new Map<string, number | null>();
+  const selfDeleted = new Set<string>();
   const noteTerminal = (terminal: TerminalSummary) => {
     const threadTerminals =
       liveTerminals.get(terminal.threadId) ?? new Map<string, TerminalSummary>();
@@ -341,6 +389,10 @@ const make = Effect.gen(function* () {
           inside(worktreePath, cwd)
         );
       });
+  const threadHasTerminal = (threadId: ThreadId) =>
+    [...(liveTerminals.get(threadId)?.values() ?? [])].some(
+      (terminal) => terminal.status === "starting" || terminal.status === "running",
+    );
 
   // pnpm imports packages by clone or reflink when its store shares a device
   // with the worktree. Those files have one link but share blocks with the
@@ -426,6 +478,7 @@ const make = Effect.gen(function* () {
     const projects = yield* projectStore.listShells();
     return { projects, threads: [...snapshot.threads, ...snapshot.archivedThreads] };
   });
+  type CleanupSnapshot = Effect.Success<ReturnType<typeof readThreads>>;
 
   const containsProjectRoot = Effect.fn("StorageCleanup.containsProjectRoot")(function* (
     worktreePath: string,
@@ -818,9 +871,11 @@ const make = Effect.gen(function* () {
     serverSettings: ServerSettings,
     now: number,
     entries: StorageCleanupReportEntry[],
+    snapshot: CleanupSnapshot,
+    due: ReadonlySet<ThreadId>,
   ) {
-    if (!anyWorktreePolicy(serverSettings, worktreeCleanupEnabled))
-      return { waiting: false, kept: [] };
+    const worktreePolicy = anyWorktreePolicy(serverSettings, worktreeCleanupEnabled);
+    if (!worktreePolicy && due.size === 0) return { waiting: false, kept: [] };
     let waiting = false;
     const kept: string[] = [];
     const roots: Array<string> = [];
@@ -861,7 +916,6 @@ const make = Effect.gen(function* () {
         Effect.map((thread) => ({ ...thread, workspaceRoot: row.workspaceRoot })),
       ),
     )).filter((thread) => thread.worktreePath !== null && thread.branch !== null);
-    const snapshot = yield* readThreads();
     const threadsById = new Map(snapshot.threads.map((thread) => [thread.id, thread]));
     const refreshedDefaultRefs = new Map<string, Set<string>>();
     const defaultBranches = new Map<string, string | null>();
@@ -891,7 +945,7 @@ const make = Effect.gen(function* () {
     ];
     for (const thread of candidates) {
       const settings = resolveWorktreeCleanup(serverSettings, thread.projectId);
-      if (!worktreeCleanupEnabled(settings)) continue;
+      if (!worktreeCleanupEnabled(settings) && !due.has(thread.id)) continue;
       const worktreePath = path.resolve(thread.worktreePath!);
       const group = groups.get(worktreePath) ?? [];
       const activityAt = Math.max(...group.map(storageCleanupActivityAt));
@@ -960,12 +1014,14 @@ const make = Effect.gen(function* () {
           settledFor !== null &&
           settings.worktreeSettledAfterDays !== null &&
           settledFor >= settings.worktreeSettledAfterDays * DAY_MS;
-        let eligible = deleted || old || settled;
+        let eligible = deleted || old || settled || due.has(thread.id);
         let removalReason = deleted
           ? "thread was deleted"
           : old
             ? `inactive for ${Math.floor((now - activityAt) / DAY_MS)} days`
-            : `settled for ${settledDays} days`;
+            : settled
+              ? `settled for ${settledDays} days`
+              : "thread is due for deletion";
         const notDueReason =
           !deleted && settings.worktreeAfterDays !== null
             ? `inactive for ${Math.floor((now - activityAt) / DAY_MS)} of ${settings.worktreeAfterDays} days`
@@ -1127,6 +1183,8 @@ const make = Effect.gen(function* () {
                 shell.branch !== thread.branch ||
                 !Equal.equals(shell.settledAt, previous.settledAt) ||
                 (shell.settledAt !== null && !Equal.equals(shell.updatedAt, previous.updatedAt)) ||
+                (due.has(shell.id) &&
+                  settledThreadLastActivityMs(shell) !== settledThreadLastActivityMs(previous)) ||
                 !storageCleanupThreadIdle(shell, now, serverSettings) ||
                 path.resolve(shell.worktreePath!) !== worktreePath ||
                 storageCleanupActivityAt(shell) !== storageCleanupActivityAt(previous)
@@ -1200,6 +1258,8 @@ const make = Effect.gen(function* () {
               currentSettings.autoResumeLimitedThreads !==
                 serverSettings.autoResumeLimitedThreads ||
               currentSettings.snoozeLimitedThreads !== serverSettings.snoozeLimitedThreads ||
+              currentSettings.storageCleanup.threadSettledAfterDays !==
+                serverSettings.storageCleanup.threadSettledAfterDays ||
               Object.keys(settings).some(
                 (key) =>
                   current[key as keyof typeof settings] !== settings[key as keyof typeof settings],
@@ -1247,12 +1307,157 @@ const make = Effect.gen(function* () {
         ),
       );
     }
-    yield* reportOrphanWorktrees(
-      roots,
-      yield* projectStore.list({ includeDeleted: true }),
-      entries,
-    );
+    if (worktreePolicy)
+      yield* reportOrphanWorktrees(
+        roots,
+        yield* projectStore.list({ includeDeleted: true }),
+        entries,
+      );
     return { waiting, kept };
+  });
+
+  const threadEntry = (
+    thread: OrchestrationV2ThreadShell,
+    snapshot: CleanupSnapshot,
+    outcome: StorageCleanupReportEntry["outcome"],
+    reason: string,
+  ): StorageCleanupReportEntry => ({
+    kind: "thread",
+    outcome,
+    reason,
+    path: null,
+    projectPath:
+      snapshot.projects.find((project) => project.id === thread.projectId)?.workspaceRoot ?? null,
+    threadId: thread.id,
+    threadTitle: thread.title,
+    bytes: null,
+    files: null,
+  });
+
+  // Deleting a thread also deletes its scheduled tasks.
+  const boundThreadIds = Effect.fn("StorageCleanup.boundThreadIds")(function* () {
+    const rows = yield* sql<{ thread_id: string }>`
+      SELECT DISTINCT thread_id FROM scheduled_tasks WHERE thread_id IS NOT NULL
+    `.pipe(NodeSqliteClient.readOnly);
+    return new Set(rows.map((row) => row.thread_id));
+  });
+
+  const settledThreadsDue = Effect.fn("StorageCleanup.settledThreadsDue")(function* (
+    serverSettings: ServerSettings,
+    now: number,
+    days: number,
+    snapshot: CleanupSnapshot,
+    entries: StorageCleanupReportEntry[],
+  ) {
+    const cutoff = now - days * DAY_MS;
+    const bound = yield* boundThreadIds();
+    const activeDescendant = activeDescendantCheck(snapshot.threads, now, cutoff, serverSettings);
+    const due: OrchestrationV2ThreadShell[] = [];
+    for (const thread of snapshot.threads) {
+      if (!storageCleanupSettledThreadDue(thread, now, days, serverSettings)) continue;
+      const exemption = bound.has(thread.id)
+        ? "A scheduled task uses this thread"
+        : threadHasTerminal(thread.id)
+          ? "Open terminal"
+          : activeDescendant(thread)
+            ? "A subagent or side chat is still active"
+            : thread.worktreePath !== null &&
+                serverSettings.projectSettingsOverrides[thread.projectId]?.worktreeCleanup?.mode ===
+                  "off"
+              ? "Worktree cleanup is off for this project"
+              : null;
+      if (exemption === null) due.push(thread);
+      else entries.push(threadEntry(thread, snapshot, "kept", exemption));
+    }
+    return due;
+  });
+
+  const deleteSettledThreads = Effect.fn("StorageCleanup.deleteSettledThreads")(function* (
+    serverSettings: ServerSettings,
+    now: number,
+    days: number,
+    snapshot: CleanupSnapshot,
+    due: ReadonlyArray<OrchestrationV2ThreadShell>,
+    entries: StorageCleanupReportEntry[],
+  ) {
+    const bound = yield* boundThreadIds();
+    // Worktree checks can take minutes; a failed re-read fails the pass, so nothing is deleted.
+    const activeDescendant = activeDescendantCheck(
+      (yield* readThreads()).threads,
+      now,
+      now - days * DAY_MS,
+      serverSettings,
+    );
+    const deleted = new Set<ThreadId>();
+    for (const thread of due) {
+      const current = yield* settingsService.getSettings.pipe(Effect.orElseSucceed(() => null));
+      if (current?.storageCleanup.threadSettledAfterDays !== days) break;
+      const keep = (reason: string) => entries.push(threadEntry(thread, snapshot, "kept", reason));
+      yield* Effect.gen(function* () {
+        if (bound.has(thread.id)) return keep("A scheduled task uses this thread");
+        if (threadHasTerminal(thread.id)) return keep("Open terminal");
+        if (activeDescendant(thread)) return keep("A subagent or side chat is still active");
+        if (thread.worktreePath !== null) {
+          const worktreePath = path.resolve(thread.worktreePath);
+          const available = (target: string) =>
+            fs.exists(target).pipe(Effect.orElseSucceed(() => null));
+          const exists = yield* available(worktreePath);
+          if (exists === null) return keep("Worktree folder is unavailable");
+          if (exists) {
+            const shared = snapshot.threads.some(
+              (other) =>
+                other.id !== thread.id &&
+                isListedThreadLineage(other.lineage) &&
+                other.deletedAt === null &&
+                !deleted.has(other.id) &&
+                other.worktreePath !== null &&
+                pathKey(other.worktreePath) === pathKey(worktreePath),
+            );
+            if (!shared) return keep("Worktree was kept");
+          } else if ((yield* available(path.dirname(worktreePath))) !== true) {
+            return keep("Worktree folder is unavailable");
+          }
+        }
+        // Registered first: the stream can deliver thread.deleted before dispatch returns.
+        selfDeleted.add(thread.id);
+        const result = yield* threadManagement
+          .dispatch({
+            type: "thread.delete",
+            commandId: CommandId.make(`server:storage-cleanup:${thread.id}:${now}`),
+            threadId: thread.id,
+            settledBefore: DateTime.makeUnsafe(now - days * DAY_MS),
+          })
+          .pipe(Effect.onError(() => Effect.sync(() => selfDeleted.delete(thread.id))));
+        if (result.storedEvents.length === 0) {
+          selfDeleted.delete(thread.id);
+          return keep("Thread changed since check");
+        }
+        deleted.add(thread.id);
+        entries.push(
+          threadEntry(
+            thread,
+            snapshot,
+            "removed",
+            `Settled for ${Math.floor((now - settledThreadLastActivityMs(thread)) / DAY_MS)} days`,
+          ),
+        );
+        yield* Effect.logInfo("storage cleanup deleted settled thread", {
+          threadId: thread.id,
+          threadTitle: thread.title,
+          projectId: thread.projectId,
+        });
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.gen(function* () {
+            entries.push(threadEntry(thread, snapshot, "failed", cleanupFailureReason(error)));
+            yield* Effect.logWarning("storage cleanup failed for thread", {
+              threadId: thread.id,
+              error,
+            });
+          }),
+        ),
+      );
+    }
   });
 
   const cleanFiles = Effect.fn("StorageCleanup.cleanFiles")(function* (
@@ -1308,11 +1513,12 @@ const make = Effect.gen(function* () {
     const serverSettings = yield* settingsService.getSettings;
     const settings = serverSettings.storageCleanup;
     const entries: StorageCleanupReportEntry[] = [];
-    const deletedWorktrees = yield* cleanWorktrees(serverSettings, now, entries).pipe(
-      Effect.catch((error) =>
+    const days = settings.threadSettledAfterDays;
+    const failed =
+      (kind: "worktree" | "thread", message: string) => (error: { readonly message: string }) =>
         Effect.gen(function* () {
           entries.push({
-            kind: "worktree",
+            kind,
             outcome: "failed",
             reason: cleanupFailureReason(error),
             path: null,
@@ -1322,11 +1528,48 @@ const make = Effect.gen(function* () {
             bytes: null,
             files: null,
           });
-          yield* Effect.logWarning("worktree cleanup failed", { error });
-          return { waiting: true, kept: [] };
-        }),
-      ),
-    );
+          yield* Effect.logWarning(message, { error });
+        });
+    const readsThreads = days !== null || anyWorktreePolicy(serverSettings, worktreeCleanupEnabled);
+    const snapshot = !readsThreads
+      ? null
+      : yield* readThreads().pipe(
+          Effect.catch((error) =>
+            failed(
+              days === null ? "worktree" : "thread",
+              "storage cleanup snapshot failed",
+            )(error).pipe(Effect.as(null)),
+          ),
+        );
+    const due =
+      days === null || snapshot === null
+        ? []
+        : yield* settledThreadsDue(serverSettings, now, days, snapshot, entries).pipe(
+            Effect.catch((error) =>
+              failed("thread", "settled thread cleanup failed")(error).pipe(Effect.as([])),
+            ),
+          );
+    const deletedWorktrees =
+      snapshot === null
+        ? { waiting: readsThreads, kept: [] }
+        : yield* cleanWorktrees(
+            serverSettings,
+            now,
+            entries,
+            snapshot,
+            new Set(due.map((thread) => thread.id)),
+          ).pipe(
+            Effect.catch((error) =>
+              failed(
+                "worktree",
+                "worktree cleanup failed",
+              )(error).pipe(Effect.as({ waiting: true, kept: [] })),
+            ),
+          );
+    if (days !== null && snapshot !== null && due.length > 0)
+      yield* deleteSettledThreads(serverSettings, now, days, snapshot, due, entries).pipe(
+        Effect.catch(failed("thread", "settled thread cleanup failed")),
+      );
     deletedWorktreeWaits = deletedWorktrees.waiting;
     keptDeletedWorktrees = deletedWorktrees.kept;
     sweptDeletions = deletionsAtStart;
@@ -1471,8 +1714,10 @@ const make = Effect.gen(function* () {
     );
     yield* forkParked(
       Stream.runForEach(events, (event) => {
-        if (event.type === "thread.deleted") deletions++;
-        else if (
+        if (event.type === "thread.deleted") {
+          if (selfDeleted.delete(event.threadId)) return Effect.void;
+          deletions++;
+        } else if (
           event.type !== "provider-session.updated" ||
           (event.payload.status !== "stopped" && event.payload.status !== "error")
         )

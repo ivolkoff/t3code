@@ -246,6 +246,8 @@ rules to connected environments that support shared settings. Offline environmen
 and older servers keep their previous values. Changing a rule does not reopen
 already settled threads.
 
+Settled threads can also be deleted automatically after a retention period; see Storage cleanup in [Project settings](project-settings.md#storage-cleanup).
+
 ## Link a pull request
 
 The server finds the PR for each unsettled thread's saved branch, even when your

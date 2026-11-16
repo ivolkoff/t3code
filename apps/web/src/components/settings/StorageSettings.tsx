@@ -21,6 +21,15 @@ import { useDebouncedValue } from "../../state/queries";
 import { AnimatedHeight } from "../AnimatedHeight";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -172,6 +181,136 @@ function RetentionControl({
   );
 }
 
+const THREAD_RETENTION_PRESETS = [7, 14, 30, 90];
+
+function ThreadRetentionSelect({
+  value,
+  onChange,
+  targets,
+}: {
+  value: number | null;
+  onChange: (value: number | null) => void;
+  targets: readonly ScopedSettingsTarget[];
+}) {
+  const [custom, setCustom] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [pending, setPending] = useState<number | null>(null);
+  const [savedValue, setSavedValue] = useState(value);
+  if (savedValue !== value) {
+    setSavedValue(value);
+    setDraft(value);
+  }
+  const showCustom = custom || (value !== null && !THREAD_RETENTION_PRESETS.includes(value));
+  const selected = showCustom ? "custom" : value === null ? "off" : String(value);
+  const affected = (days: number) =>
+    targets.filter((target) => {
+      const current = target.settings.storageCleanup.threadSettledAfterDays;
+      return current === null || current > days;
+    });
+  const request = (days: number | null) => {
+    if (days === null) onChange(null);
+    else if (affected(days).length > 0) setPending(days);
+    else onChange(days);
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {showCustom && (
+        <NumberField
+          value={draft}
+          min={1}
+          max={3650}
+          step={1}
+          size="sm"
+          className="w-auto"
+          onValueChange={setDraft}
+          onValueCommitted={(next) => {
+            if (next === null) setDraft(value);
+            else {
+              const days = Math.min(3650, Math.max(1, Math.round(next)));
+              setDraft(days);
+              request(days);
+            }
+          }}
+        >
+          <NumberFieldGroup>
+            <NumberFieldDecrement aria-label="Decrease Delete settled threads" />
+            <NumberFieldInput
+              aria-label="Delete settled threads in days"
+              size={5}
+              className="w-auto grow-0 text-right"
+            />
+            <span aria-hidden="true" className="self-center pr-2 text-xs">
+              days
+            </span>
+            <NumberFieldIncrement aria-label="Increase Delete settled threads" />
+          </NumberFieldGroup>
+        </NumberField>
+      )}
+      <Select
+        value={selected}
+        onValueChange={(next) => {
+          if (next === "custom") setCustom(true);
+          else {
+            setCustom(false);
+            request(next === "off" ? null : Number(next));
+          }
+        }}
+      >
+        <SelectTrigger size="sm" aria-label="Delete settled threads">
+          <SelectValue>
+            {showCustom ? "Custom…" : value === null ? "Off" : `${value} days`}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup align="end" alignItemWithTrigger={false}>
+          <SelectItem value="off">Off</SelectItem>
+          {THREAD_RETENTION_PRESETS.map((days) => (
+            <SelectItem key={days} value={String(days)}>
+              {days} days
+            </SelectItem>
+          ))}
+          <SelectItem value="custom">Custom…</SelectItem>
+        </SelectPopup>
+      </Select>
+      <AlertDialog
+        open={pending !== null}
+        onOpenChange={(open) => {
+          if (open) return;
+          setPending(null);
+          setDraft(value);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete settled threads?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Threads settled for more than {pending} {pending === 1 ? "day" : "days"} on{" "}
+              {pending === null
+                ? ""
+                : affected(pending)
+                    .map((target) => target.label)
+                    .join(", ")}{" "}
+              will be permanently deleted with their worktrees, now and at every hourly cleanup. A
+              thread whose worktree has uncommitted changes is kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button
+              onClick={() => {
+                if (pending !== null) onChange(pending);
+                setPending(null);
+              }}
+            >
+              Delete threads
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </div>
+  );
+}
+
 const KEEP_WHEN_LABELS = {
   "any-local-files": "Any local files",
   "uncommitted-changes": "Uncommitted changes",
@@ -208,7 +347,9 @@ function CleanupResults({
                 : entry.path?.split(/[\\/]/).findLast(Boolean)) ?? "Worktrees")
             : entry.kind === "logs"
               ? "Rotated logs"
-              : "Browser artifacts";
+              : entry.kind === "thread"
+                ? (entry.threadTitle ?? "Thread")
+                : "Browser artifacts";
         return (
           <SettingsRow
             key={`${entry.path ?? entry.kind}:${entry.threadId ?? index}`}
@@ -317,6 +458,7 @@ function CleanupSection() {
     return (
       settings.storageCleanup.browserArtifactsAfterDays !== null ||
       settings.storageCleanup.logsAfterDays !== null ||
+      settings.storageCleanup.threadSettledAfterDays !== null ||
       enabled(resolveWorktreeCleanup(settings, null)) ||
       Object.values(settings.projectSettingsOverrides).some(
         (override) =>
@@ -728,6 +870,14 @@ export function StorageCleanupSections() {
     );
   const settledArtifactsStatus = useDebouncedValue(`${targetIdsKey}:${artifactsMixed}`, 300);
   const settledLogsStatus = useDebouncedValue(`${targetIdsKey}:${logsMixed}`, 300);
+  const threadsStatus =
+    targets.length > 1 &&
+    targets.some(
+      (target) =>
+        target.settings.storageCleanup.threadSettledAfterDays !== settings.threadSettledAfterDays,
+    )
+      ? "Mixed across selected machines"
+      : undefined;
   const artifactsStatus =
     targets.length > 1 && settledArtifactsStatus === `${targetIdsKey}:true`
       ? "Mixed across selected machines"
@@ -794,6 +944,27 @@ export function StorageCleanupSections() {
             }
           />
         </AnimatedHeight>
+        {connectedEnvironments.every(
+          (environment) =>
+            environment.serverConfig?.environment.capabilities.settledThreadCleanup === true,
+        ) && (
+          <AnimatedHeight>
+            <SettingsRow
+              title="Delete settled threads"
+              status={threadsStatus}
+              managedPaths={["storageCleanup.threadSettledAfterDays"]}
+              description="Permanently delete threads and their worktrees this many days after they settle. A worktree with uncommitted changes, or a scheduled task, keeps its thread. Deleted threads cannot be restored."
+              serverScoped
+              control={
+                <ThreadRetentionSelect
+                  value={settings.threadSettledAfterDays}
+                  targets={targets}
+                  onChange={(threadSettledAfterDays) => update({ threadSettledAfterDays })}
+                />
+              }
+            />
+          </AnimatedHeight>
+        )}
       </SettingsSection>
       <CleanupSection />
     </>
