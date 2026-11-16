@@ -1169,6 +1169,106 @@ it.effect("closing a side chat deletes it only while unused; a deleted parent ta
   }).pipe(Effect.provide(forkCases[0]!.layer)),
 );
 
+it.effect("automatic deletion skips a thread changed since its cutoff", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const settled = (name: string) =>
+      Effect.gen(function* () {
+        const threadId = ThreadId.make(`auto-delete-${name}`);
+        yield* createParent(threadId);
+        yield* writeParentRun({
+          threadId,
+          runId: RunId.make(`auto-delete-${name}-run`),
+          ordinal: 1,
+          status: "completed",
+          text: "Work",
+          stable: true,
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make(`auto-delete-${name}-settle`),
+          threadId,
+        });
+        return threadId;
+      });
+    const cutoff = (threadId: ThreadId) =>
+      orchestrator
+        .getThreadProjection(threadId)
+        .pipe(
+          Effect.map(({ thread }) =>
+            Math.max(
+              ...[thread.settledAt, thread.updatedAt, thread.lastVisitedAt].flatMap((at) =>
+                at === null ? [] : [DateTime.toEpochMillis(at)],
+              ),
+            ),
+          ),
+        );
+    const autoDelete = (threadId: ThreadId, settledBefore: number) =>
+      orchestrator.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.make(`auto-delete:${threadId}`),
+        threadId,
+        settledBefore: DateTime.makeUnsafe(settledBefore),
+      });
+    const deletedAt = (threadId: ThreadId) =>
+      orchestrator.getThreadProjection(threadId).pipe(Effect.map(({ thread }) => thread.deletedAt));
+
+    const a = yield* settled("a");
+    yield* autoDelete(a, yield* cutoff(a));
+    assert.isNotNull(yield* deletedAt(a));
+
+    const b = yield* settled("b");
+    yield* orchestrator.dispatch({
+      type: "thread.unsettle",
+      commandId: CommandId.make("auto-delete-b-unsettle"),
+      threadId: b,
+      reason: "user",
+    });
+    yield* autoDelete(b, yield* cutoff(b));
+    assert.isNull(yield* deletedAt(b));
+
+    const c = yield* settled("c");
+    yield* orchestrator.dispatch({
+      type: "thread.archive",
+      commandId: CommandId.make("auto-delete-c-archive"),
+      threadId: c,
+    });
+    yield* autoDelete(c, yield* cutoff(c));
+    assert.isNull(yield* deletedAt(c));
+
+    const d = yield* settled("d");
+    yield* autoDelete(d, (yield* cutoff(d)) - 1);
+    assert.isNull(yield* deletedAt(d));
+
+    const e = yield* settled("e");
+    const beforeOpen = yield* cutoff(e);
+    yield* TestClock.adjust("1 hour");
+    const visitedAt = yield* orchestrator
+      .getThreadProjection(e)
+      .pipe(Effect.map(({ thread }) => DateTime.formatIso(thread.updatedAt)));
+    yield* orchestrator.dispatch({
+      type: "thread.visit",
+      commandId: CommandId.make("auto-delete-e-visit"),
+      threadId: e,
+      visitedAt,
+      opened: true,
+    });
+    const refused = yield* autoDelete(e, beforeOpen);
+    assert.strictEqual(refused.storedEvents.length, 0);
+    assert.isNull(yield* deletedAt(e));
+
+    const f = yield* settled("f");
+    yield* orchestrator.dispatch({
+      type: "thread.snooze",
+      commandId: CommandId.make("auto-delete-f-snooze"),
+      threadId: f,
+      snoozedUntil: DateTime.formatIso(DateTime.add(yield* DateTime.now, { days: 7 })),
+    });
+    yield* autoDelete(f, yield* cutoff(f));
+    assert.isNull(yield* deletedAt(f));
+  }).pipe(Effect.provide(forkCases[0]!.layer)),
+);
+
 it.effect("a side chat opened during the parent's first turn starts from a digest", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
