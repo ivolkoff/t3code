@@ -5,17 +5,15 @@ import {
   displayLimitWindows,
   formatPaceReserve,
   type LimitAccount,
-  type LimitPace,
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
-  paceOf,
   paceRemainingPercent,
   paceReservePercent,
   remainingPercent,
   type ResetCreditChoice,
 } from "@t3tools/shared/usageLimits";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import { AlertTriangleIcon, ExternalLinkIcon, TicketIcon } from "lucide-react";
@@ -49,12 +47,6 @@ import {
   formatResetsIn,
   resetCreditChoices,
 } from "@t3tools/shared/usageLimitsCopy";
-
-const PACE_LABEL: Record<LimitPace, string> = {
-  ahead: msg("Ahead of pace"),
-  on: msg("On pace"),
-  under: msg("Under pace"),
-};
 
 function accountInitials(email: string): string {
   const [local = "", domain = ""] = email.split("@");
@@ -133,7 +125,7 @@ function AccountName({
   );
 }
 
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+export function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3">
       <span className="text-muted-foreground">{label}</span>
@@ -161,7 +153,6 @@ function SegmentPopover({
   const gt = useGT();
   const m = useMessages();
   const remaining = remainingPercent(window);
-  const pace = paceOf(window, now);
   const reserve = paceReservePercent(window, now);
   const resetsIn = formatResetsIn(window, now, m, "in");
   const where =
@@ -209,18 +200,13 @@ function SegmentPopover({
       </div>
       <div className="flex flex-col gap-1 border-t border-border/60 pt-2.5">
         <Row label={gt("Left", { $context: "remaining usage" })}>{remaining}%</Row>
-        {pace ? (
-          <Row label={gt("Pace", { $context: "usage pace" })}>
-            {m(PACE_LABEL[pace])}
-            {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`}
-          </Row>
-        ) : null}
         {window.resetsAt ? (
           <Row label={gt("Resets", { $context: "when the usage window resets" })}>
             {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m)}
             {resetsIn ? ` · ${resetsIn}` : ""}
           </Row>
         ) : null}
+        {reserve !== null ? <Row label={gt("Even pace")}>{formatPaceReserve(reserve)}</Row> : null}
         {reset && reset.restoresPercent > 0 ? (
           <Row label={gt("Restores", { $context: "a reset credit restores part of the pool" })}>
             {gt("+{percent}% of pool", { percent: reset.restoresPercent })}

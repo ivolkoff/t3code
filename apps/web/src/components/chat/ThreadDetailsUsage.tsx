@@ -7,15 +7,13 @@ import type {
 import {
   collectProviderUsageLimits,
   formatPaceReserve,
-  type LimitPace,
-  paceOf,
   paceRemainingPercent,
   paceReservePercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
-import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
+import { formatResetsIn, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 import { Link } from "@tanstack/react-router";
-import { msg, useGT, useLocale, useMessages } from "gt-react";
+import { useGT, useLocale, useMessages } from "gt-react";
 import type { ReactNode } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -25,14 +23,9 @@ import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Row } from "../usage/UsageLimitsPooled";
 import { formatContextWindowCompactionMessage } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
-
-const PACE_LABEL: Record<LimitPace, string> = {
-  ahead: msg("Ahead of pace"),
-  on: msg("On pace"),
-  under: msg("Under pace"),
-};
 
 export interface ThreadDetailsUsageInput {
   readonly providerInstanceId: ProviderInstanceId | null;
@@ -167,10 +160,9 @@ function LimitRow({
   const m = useMessages();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const left = remainingPercent(window);
-  const pace = paceOf(window, now);
   const timeLeft = paceRemainingPercent(window, now);
   const reserve = paceReservePercent(window, now);
-  const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
+  const resetsIn = formatResetsIn(window, now, m, "in");
   return (
     <UsageRow
       label={window.label}
@@ -181,26 +173,19 @@ function LimitRow({
       ariaValue={gt("{left}% left", { left })}
       opensUsage
       tooltip={
-        <>
-          <span className="text-foreground">
-            {gt("{label}: {left}% left", { label: window.label, left })}
-          </span>
-          {pace && timeLeft !== null ? (
-            <span className="text-muted-foreground">
-              {m(PACE_LABEL[pace])}
-              {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`} ·{" "}
-              {gt("{timeLeft}% of the window left", { timeLeft })}
-            </span>
+        <div className="flex w-56 flex-col gap-1">
+          <span className="font-medium text-foreground">{window.label}</span>
+          <Row label={gt("Left", { $context: "remaining usage" })}>{left}%</Row>
+          {window.resetsAt ? (
+            <Row label={gt("Resets", { $context: "when the usage window resets" })}>
+              {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m)}
+              {resetsIn ? ` · ${resetsIn}` : ""}
+            </Row>
           ) : null}
-          {window.resetsAt && resetsAt > now ? (
-            <span className="text-muted-foreground">
-              {gt("Resets {time} · in {duration}", {
-                time: formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m),
-                duration: formatDuration(resetsAt - now, m),
-              })}
-            </span>
+          {reserve !== null ? (
+            <Row label={gt("Even pace")}>{formatPaceReserve(reserve)}</Row>
           ) : null}
-        </>
+        </div>
       }
     />
   );
