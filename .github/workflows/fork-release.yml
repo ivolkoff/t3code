@@ -37,7 +37,7 @@ jobs:
             arch: x64
             rust_target: x86_64-pc-windows-msvc
           - label: macOS arm64
-            runner: macos-14
+            runner: macos-26
             platform: mac
             target: dmg
             arch: arm64
