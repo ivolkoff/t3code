@@ -60,8 +60,16 @@ jobs:
           git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach FETCH_HEAD
 
+      # The cached ~/.vite-plus from hosted runners symlinks into /Users/runner.
       - name: Setup dependencies
+        if: runner.environment != 'self-hosted'
         uses: ./.github/actions/setup-ci-deps
+
+      - name: Setup dependencies (self-hosted)
+        if: runner.environment == 'self-hosted'
+        run: |
+          echo "$HOME/.local/share/vite-plus/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/share/vite-plus/bin/vp" install
 
       - name: Install Linux build libraries
         if: runner.os == 'Linux'
