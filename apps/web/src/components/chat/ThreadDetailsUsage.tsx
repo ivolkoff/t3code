@@ -174,8 +174,8 @@ function LimitRow({
           ) : null}
           {window.resetsAt && resetsAt > now ? (
             <span className="text-muted-foreground">
-              Resets in {formatDuration(resetsAt - now)} ·{" "}
-              {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)}
+              Resets {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)} · in{" "}
+              {formatDuration(resetsAt - now)}
             </span>
           ) : null}
         </>

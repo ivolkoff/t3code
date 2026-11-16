@@ -6,12 +6,16 @@ import {
   collectLimitPools,
   cursorUsageWindowDetails,
   displayLimitWindows,
+  formatPaceReserve,
   formatResetsIn,
   type LimitAccount,
+  type LimitPace,
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
+  paceOf,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
   type ResetCreditChoice,
   resetCreditChoices,
@@ -42,6 +46,12 @@ import { OpenAI } from "../Icons";
 import { Alert, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { PaceIcon, ResetCreditDialog, barColor, usePaceMark, useResetCredit } from "./UsageLimits";
+
+const PACE_LABEL: Record<LimitPace, string> = {
+  ahead: "Ahead of pace",
+  on: "On pace",
+  under: "Under pace",
+};
 
 function accountInitials(email: string): string {
   const [local = "", domain = ""] = email.split("@");
@@ -145,7 +155,8 @@ function SegmentPopover({
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const pace = paceOf(window, now);
+  const reserve = paceReservePercent(window, now);
   const resetsIn = formatResetsIn(window, now);
   const where =
     account.environments.length > 0
@@ -182,13 +193,18 @@ function SegmentPopover({
       </div>
       <div className="flex flex-col gap-1 border-t border-border/60 pt-2.5">
         <Row label="Left">{remaining}%</Row>
+        {pace ? (
+          <Row label="Pace">
+            {PACE_LABEL[pace]}
+            {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`}
+          </Row>
+        ) : null}
         {window.resetsAt ? (
           <Row label="Resets">
             {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)}
             {resetsIn ? ` · ${resetsIn.replace("resets in ", "in ")}` : ""}
           </Row>
         ) : null}
-        {timeLeft !== null ? <Row label="Even pace">{timeLeft}% left by now</Row> : null}
         {reset && reset.restoresPercent > 0 ? (
           <Row label="Restores">+{reset.restoresPercent}% of pool</Row>
         ) : null}
