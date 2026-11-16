@@ -3,15 +3,19 @@ import {
   collectLimitAccounts,
   collectLimitPools,
   displayLimitWindows,
+  formatPaceReserve,
   type LimitAccount,
+  type LimitPace,
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
+  paceOf,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
   type ResetCreditChoice,
 } from "@t3tools/shared/usageLimits";
-import { T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import { AlertTriangleIcon, ExternalLinkIcon, TicketIcon } from "lucide-react";
@@ -45,6 +49,12 @@ import {
   formatResetsIn,
   resetCreditChoices,
 } from "@t3tools/shared/usageLimitsCopy";
+
+const PACE_LABEL: Record<LimitPace, string> = {
+  ahead: msg("Ahead of pace"),
+  on: msg("On pace"),
+  under: msg("Under pace"),
+};
 
 function accountInitials(email: string): string {
   const [local = "", domain = ""] = email.split("@");
@@ -151,7 +161,8 @@ function SegmentPopover({
   const gt = useGT();
   const m = useMessages();
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const pace = paceOf(window, now);
+  const reserve = paceReservePercent(window, now);
   const resetsIn = formatResetsIn(window, now, m, "in");
   const where =
     account.environments.length > 0
@@ -198,14 +209,17 @@ function SegmentPopover({
       </div>
       <div className="flex flex-col gap-1 border-t border-border/60 pt-2.5">
         <Row label={gt("Left", { $context: "remaining usage" })}>{remaining}%</Row>
+        {pace ? (
+          <Row label={gt("Pace", { $context: "usage pace" })}>
+            {m(PACE_LABEL[pace])}
+            {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`}
+          </Row>
+        ) : null}
         {window.resetsAt ? (
           <Row label={gt("Resets", { $context: "when the usage window resets" })}>
             {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m)}
             {resetsIn ? ` · ${resetsIn}` : ""}
           </Row>
-        ) : null}
-        {timeLeft !== null ? (
-          <Row label={gt("Even pace")}>{gt("{timeLeft}% left by now", { timeLeft })}</Row>
         ) : null}
         {reset && reset.restoresPercent > 0 ? (
           <Row label={gt("Restores", { $context: "a reset credit restores part of the pool" })}>

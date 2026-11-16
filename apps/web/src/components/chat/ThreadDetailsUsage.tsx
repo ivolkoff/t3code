@@ -194,9 +194,9 @@ function LimitRow({
           ) : null}
           {window.resetsAt && resetsAt > now ? (
             <span className="text-muted-foreground">
-              {gt("Resets in {duration} · {time}", {
-                duration: formatDuration(resetsAt - now, m),
+              {gt("Resets {time} · in {duration}", {
                 time: formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m),
+                duration: formatDuration(resetsAt - now, m),
               })}
             </span>
           ) : null}

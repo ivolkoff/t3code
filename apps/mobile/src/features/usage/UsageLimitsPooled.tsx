@@ -7,7 +7,10 @@ import {
   collectLimitAccounts,
   collectLimitPools,
   displayLimitWindows,
+  formatPaceReserve,
+  paceOf,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
   type LimitAccount,
   type LimitPoolWindow,
@@ -608,10 +611,12 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
     .find((candidate) => candidate.driver === account?.driver)
     ?.windows.find((candidate) => candidate.id === windowId && candidate.kind === windowKind);
   const window = pool?.members.find((member) => member.account.key === accountKey)?.window;
-  const evenPace = window ? paceRemainingPercent(window, now) : null;
+  const pace = window ? paceOf(window, now) : null;
+  const reserve = window ? paceReservePercent(window, now) : null;
   const reset = pool?.resets.find((candidate) => candidate.member.account.key === accountKey);
   const [revealed, setRevealed] = useState(false);
   const gt = useGT();
+  const m = useMessages();
   return (
     <SettingsScreen title={gt("Account", { $context: "screen title" })}>
       <ScrollView
@@ -661,6 +666,12 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
                   <Var>{remainingPercent(window)}</Var>% left
                 </T>
               </Text>
+              {pace ? (
+                <Text className="text-sm text-foreground-muted">
+                  {m(PACE_LABEL[pace])}
+                  {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`}
+                </Text>
+              ) : null}
               {window.resetsAt ? (
                 <Text selectable className="text-sm text-foreground-muted">
                   <T>
@@ -671,13 +682,6 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
                         timeStyle: "short",
                       })}
                     </Var>
-                  </T>
-                </Text>
-              ) : null}
-              {evenPace !== null ? (
-                <Text className="text-sm text-foreground-muted">
-                  <T>
-                    Even pace: <Var>{evenPace}</Var>% left by now
                   </T>
                 </Text>
               ) : null}
