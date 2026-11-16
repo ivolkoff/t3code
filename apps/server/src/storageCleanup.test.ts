@@ -3899,7 +3899,10 @@ describe("settled thread deletion", () => {
         const report = yield* fixture.service.runNow;
         expect(fixture.dispatched()).toHaveLength(1);
         expect(threadEntries(report)).toEqual([
-          expect.objectContaining({ outcome: "removed", reason: "Settled for 31 days" }),
+          expect.objectContaining({
+            outcome: "removed",
+            reason: "Settled and inactive for 31 days",
+          }),
         ]);
       }),
     ),

@@ -268,7 +268,8 @@ on **Delete now**. The thread's worktree is removed first under the safety check
 worktree rules say; if the worktree is kept, for example because of uncommitted changes, the thread stays
 and the results say why. Archived threads, threads bound to a scheduled task, threads with a running
 terminal, threads with active or recently active subagents or side chats, and worktree threads in projects
-whose worktree cleanup is **Off** are kept. Archive or unsettle a thread to keep it. Deletion cannot be
+whose worktree cleanup is **Off** are kept. A snoozed thread is counted from when it wakes. Archive or
+unsettle a thread to keep it. Deletion cannot be
 undone, so turning the rule on, shortening the period, or enabling it on another machine asks for
 confirmation. Deleted threads appear in the results.
 
