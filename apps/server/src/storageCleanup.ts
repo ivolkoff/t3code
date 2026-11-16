@@ -1852,7 +1852,7 @@ const make = Effect.gen(function* () {
             thread,
             snapshot,
             "removed",
-            `Settled for ${Math.floor((now - settledThreadLastActivityMs(thread)) / DAY_MS)} days`,
+            `Settled and inactive for ${Math.floor((now - settledThreadLastActivityMs(thread)) / DAY_MS)} days`,
           ),
         );
         yield* Effect.logInfo("storage cleanup deleted settled thread", {
