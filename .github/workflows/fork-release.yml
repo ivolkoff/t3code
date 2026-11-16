@@ -93,6 +93,9 @@ jobs:
       - name: Build desktop artifact
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # Squirrel.Mac installs only an update signed like the running app; the self-hosted
+          # Mac's login keychain holds this self-signed identity, trusted for code signing.
+          CSC_NAME: ${{ matrix.platform == 'mac' && 'T3 Code Local' || '' }}
           # The updater only offers a strictly newer version, so every build gets its own.
           VERSION: ${{ inputs.version }}-fork.${{ github.run_number }}
         run: >-
