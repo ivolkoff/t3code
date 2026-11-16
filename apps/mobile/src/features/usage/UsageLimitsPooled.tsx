@@ -10,11 +10,8 @@ import {
   collectLimitPools,
   cursorUsageWindowDetails,
   displayLimitWindows,
-  formatPaceReserve,
   formatResetsIn,
-  paceOf,
   paceRemainingPercent,
-  paceReservePercent,
   remainingPercent,
   type LimitAccount,
   type LimitPoolWindow,
@@ -539,8 +536,7 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
     .find((candidate) => candidate.driver === account?.driver)
     ?.windows.find((candidate) => candidate.id === windowId && candidate.kind === windowKind);
   const window = pool?.members.find((member) => member.account.key === accountKey)?.window;
-  const pace = window ? paceOf(window, now) : null;
-  const reserve = window ? paceReservePercent(window, now) : null;
+  const evenPace = window ? paceRemainingPercent(window, now) : null;
   const reset = pool?.resets.find((candidate) => candidate.member.account.key === accountKey);
   const [revealed, setRevealed] = useState(false);
   return (
@@ -588,12 +584,6 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
               <Text className="text-3xl font-t3-bold tabular-nums text-foreground">
                 {remainingPercent(window)}% left
               </Text>
-              {pace ? (
-                <Text className="text-sm text-foreground-muted">
-                  {PACE_LABEL[pace]}
-                  {reserve === null ? "" : ` · ${formatPaceReserve(reserve)}`}
-                </Text>
-              ) : null}
               {window.resetsAt ? (
                 <Text selectable className="text-sm text-foreground-muted">
                   Resets{" "}
@@ -601,6 +591,11 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
                     dateStyle: "medium",
                     timeStyle: "short",
                   })}
+                </Text>
+              ) : null}
+              {evenPace !== null ? (
+                <Text className="text-sm text-foreground-muted">
+                  Even pace: {evenPace}% left by now
                 </Text>
               ) : null}
               {reset && reset.restoresPercent > 0 ? (
