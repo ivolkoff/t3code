@@ -1,6 +1,7 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
+import { threadTagKey } from "@t3tools/contracts";
 
 import type { AppBarMenuItem } from "../../components/ui/AppBar.types";
 import type { WorkspaceEnvironment } from "../../state/workspaceModel";
@@ -35,6 +36,9 @@ export function buildHomeListFilterMenuItems(props: {
   readonly selectedProjectKey: string | null;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
+  readonly tags?: ReadonlyArray<string>;
+  readonly selectedTag?: string | null;
+  readonly onTagChange?: (tag: string | null) => void;
 }): AppBarMenuItem[] {
   const items: AppBarMenuItem[] = [
     {
@@ -75,6 +79,28 @@ export function buildHomeListFilterMenuItems(props: {
           title: project.label,
           selected: props.selectedProjectKey === project.key,
           onPress: () => props.onProjectChange(project.key),
+        })),
+      ],
+    });
+  }
+
+  const { tags = [], selectedTag = null, onTagChange } = props;
+  if (onTagChange && (tags.length > 0 || selectedTag !== null)) {
+    items.push({
+      id: "tag",
+      title: "Tag",
+      items: [
+        {
+          id: "all-tags",
+          title: "All tags",
+          selected: selectedTag === null,
+          onPress: () => onTagChange(null),
+        },
+        ...tags.map((tag) => ({
+          id: `tag:${tag}`,
+          title: tag,
+          selected: selectedTag !== null && threadTagKey(selectedTag) === threadTagKey(tag),
+          onPress: () => onTagChange(tag),
         })),
       ],
     });
