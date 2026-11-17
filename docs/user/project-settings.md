@@ -261,17 +261,19 @@ counts as untracked, so only **Edited tracked files** removes a folder that hold
 than `node_modules`; the other two rules remove only empty folders. Folders that no thread uses
 are listed here too.
 
-Open **Settings → Maintenance → Artifacts and logs** and set **Delete settled threads** to delete threads
-that have been settled, untouched and unopened, for 7, 14, 30, 90 or a custom number of days. It is off
-by default, applies to the whole machine, and is not available on mobile. It runs with the other rules and
-on **Delete now**. The thread's worktree is removed first under the safety checks above, whatever the
-worktree rules say; if the worktree is kept, for example because of uncommitted changes, the thread stays
-and the results say why. Archived threads, threads bound to a scheduled task, threads with a running
-terminal, threads with active or recently active subagents or side chats, and worktree threads in projects
-whose worktree cleanup is **Off** are kept. A snoozed thread is counted from when it wakes. Archive or
-unsettle a thread to keep it. Deletion cannot be
-undone, so turning the rule on, shortening the period, or enabling it on another machine asks for
-confirmation. Deleted threads appear in the results.
+Open **Settings → Maintenance → Artifacts and logs** to clean up threads in two steps, each with its own
+period of 7, 14, 30, 90 or a custom number of days. **Archive settled threads** moves threads that have been
+settled, untouched and unopened for that long to the archive; a snoozed thread is counted from when it wakes.
+**Delete archived threads** permanently deletes threads that have been in the archive, unopened, for that long,
+including threads you archived yourself. Both are off by default, apply to the whole machine, are not
+available on mobile, and run with the other rules and on **Delete now**. Before deleting a thread, its
+worktree is removed under the safety checks above, whatever the worktree rules say; if the worktree is kept,
+for example because of uncommitted changes, the thread stays and the results say why. Threads bound to a
+scheduled task, threads with a running terminal, and threads with active or recently active subagents or side
+chats are neither archived nor deleted; worktree threads in projects whose worktree cleanup is **Off** are not
+deleted. Unarchive a thread to keep it. Deletion cannot be undone, so turning deletion on, shortening its
+period, or enabling it on another machine asks for confirmation. Archived and deleted threads appear in the
+results.
 
 Browser captures and rotated logs have separate retention periods. Expired capture links stop
 working. Current logs, message attachments, and browser profiles are kept.

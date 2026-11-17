@@ -271,10 +271,14 @@ function RetentionControl({
 const THREAD_RETENTION_PRESETS = [7, 14, 30, 90];
 
 function ThreadRetentionSelect({
+  label,
+  setting,
   value,
   onChange,
   targets,
 }: {
+  label: string;
+  setting: "threadSettledAfterDays" | "threadArchivedAfterDays";
   value: number | null;
   onChange: (value: number | null) => void;
   targets: readonly ScopedSettingsTarget[];
@@ -291,11 +295,12 @@ function ThreadRetentionSelect({
   const selected = showCustom ? "custom" : value === null ? "off" : String(value);
   const affected = (days: number) =>
     targets.filter((target) => {
-      const current = target.settings.storageCleanup.threadSettledAfterDays;
+      const current = target.settings.storageCleanup[setting];
       return current === null || current > days;
     });
   const request = (days: number | null) => {
-    if (days === null) onChange(null);
+    // Only deletion is irreversible; archiving can be undone.
+    if (days === null || setting === "threadSettledAfterDays") onChange(days);
     else if (affected(days).length > 0) setPending(days);
     else onChange(days);
   };
@@ -321,16 +326,16 @@ function ThreadRetentionSelect({
           }}
         >
           <NumberFieldGroup>
-            <NumberFieldDecrement aria-label="Decrease Delete settled threads" />
+            <NumberFieldDecrement aria-label={`Decrease ${label}`} />
             <NumberFieldInput
-              aria-label="Delete settled threads in days"
+              aria-label={`${label} in days`}
               size={5}
               className="w-auto grow-0 text-right"
             />
             <span aria-hidden="true" className="self-center pr-2 text-xs">
               days
             </span>
-            <NumberFieldIncrement aria-label="Increase Delete settled threads" />
+            <NumberFieldIncrement aria-label={`Increase ${label}`} />
           </NumberFieldGroup>
         </NumberField>
       )}
@@ -344,7 +349,7 @@ function ThreadRetentionSelect({
           }
         }}
       >
-        <SelectTrigger size="sm" aria-label="Delete settled threads">
+        <SelectTrigger size="sm" aria-label={label}>
           <SelectValue>
             {showCustom ? "Custom…" : value === null ? "Off" : `${value} days`}
           </SelectValue>
@@ -369,9 +374,9 @@ function ThreadRetentionSelect({
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete settled threads?</AlertDialogTitle>
+            <AlertDialogTitle>Delete archived threads?</AlertDialogTitle>
             <AlertDialogDescription>
-              Threads settled for more than {pending} {pending === 1 ? "day" : "days"} on{" "}
+              Threads archived for more than {pending} {pending === 1 ? "day" : "days"} on{" "}
               {pending === null
                 ? ""
                 : affected(pending)
@@ -546,6 +551,7 @@ function CleanupSection() {
       settings.storageCleanup.browserArtifactsAfterDays !== null ||
       settings.storageCleanup.logsAfterDays !== null ||
       settings.storageCleanup.threadSettledAfterDays !== null ||
+      settings.storageCleanup.threadArchivedAfterDays !== null ||
       enabled(resolveWorktreeCleanup(settings, null)) ||
       Object.values(settings.projectSettingsOverrides).some(
         (override) =>
@@ -959,12 +965,9 @@ export function StorageCleanupSections() {
     );
   const settledArtifactsStatus = useDebouncedValue(`${targetIdsKey}:${artifactsMixed}`, 300);
   const settledLogsStatus = useDebouncedValue(`${targetIdsKey}:${logsMixed}`, 300);
-  const threadsStatus =
+  const threadsStatus = (setting: "threadSettledAfterDays" | "threadArchivedAfterDays") =>
     targets.length > 1 &&
-    targets.some(
-      (target) =>
-        target.settings.storageCleanup.threadSettledAfterDays !== settings.threadSettledAfterDays,
-    )
+    targets.some((target) => target.settings.storageCleanup[setting] !== settings[setting])
       ? "Mixed across selected machines"
       : undefined;
   const artifactsStatus =
@@ -1041,17 +1044,37 @@ export function StorageCleanupSections() {
         ) && (
           <AnimatedHeight>
             <SettingsRow
-              title="Delete settled threads"
-              status={threadsStatus}
+              title="Archive settled threads"
+              status={threadsStatus("threadSettledAfterDays")}
               managedPaths={["storageCleanup.threadSettledAfterDays"]}
-              description="Permanently delete threads and their worktrees this many days after they settle. A worktree with uncommitted changes, or a scheduled task, keeps its thread. Deleted threads cannot be restored."
+              description="Move threads to the archive this many days after they settle and go untouched. A scheduled task keeps its thread out. Unarchive a thread to bring it back."
               serverScoped
               control={
                 <ThreadRetentionSelect
+                  label="Archive settled threads"
+                  setting="threadSettledAfterDays"
                   value={settings.threadSettledAfterDays}
                   targets={targets}
                   onChange={(threadSettledAfterDays) =>
                     updateSettings({ storageCleanup: { threadSettledAfterDays } })
+                  }
+                />
+              }
+            />
+            <SettingsRow
+              title="Delete archived threads"
+              status={threadsStatus("threadArchivedAfterDays")}
+              managedPaths={["storageCleanup.threadArchivedAfterDays"]}
+              description="Permanently delete archived threads, including ones you archived, and their worktrees this many days after archive or last open. Uncommitted changes or a scheduled task keep a thread."
+              serverScoped
+              control={
+                <ThreadRetentionSelect
+                  label="Delete archived threads"
+                  setting="threadArchivedAfterDays"
+                  value={settings.threadArchivedAfterDays}
+                  targets={targets}
+                  onChange={(threadArchivedAfterDays) =>
+                    updateSettings({ storageCleanup: { threadArchivedAfterDays } })
                   }
                 />
               }

@@ -119,6 +119,7 @@ describe("serverSettings helpers", () => {
       browserArtifactsAfterDays: null,
       logsAfterDays: 30,
       threadSettledAfterDays: null,
+      threadArchivedAfterDays: null,
     });
   });
   it("replaces a source control host's patched field so a cleared account pin does not survive", () => {

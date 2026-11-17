@@ -15022,7 +15022,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           );
         });
         // Rechecked under the thread lock: any change since the sweep's cutoff keeps the thread.
-        if (command.settledBefore !== undefined) {
+        if (command.archivedBefore !== undefined) {
           const thread = yield* projectionStore
             .getThread(command.threadId)
             .pipe(
@@ -15031,10 +15031,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               ),
             );
           if (
-            thread.settledOverride !== "settled" ||
-            thread.archivedAt !== null ||
+            thread.archivedAt === null ||
             thread.deletedAt !== null ||
-            settledThreadLastActivityMs(thread) > DateTime.toEpochMillis(command.settledBefore)
+            settledThreadLastActivityMs(thread) > DateTime.toEpochMillis(command.archivedBefore)
           ) {
             return { events: [], effects: [] };
           }
@@ -15068,7 +15067,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           effects: plans.flatMap((plan) => plan.effects),
         };
       }
-      case "thread.archive":
+      case "thread.archive": {
+        // Rechecked under the thread lock: any change since the sweep's cutoff keeps the thread.
+        if (command.settledBefore !== undefined) {
+          const thread = yield* projectionStore
+            .getThread(command.threadId)
+            .pipe(
+              Effect.mapError(
+                (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+              ),
+            );
+          if (
+            thread.settledOverride !== "settled" ||
+            thread.archivedAt !== null ||
+            thread.deletedAt !== null ||
+            settledThreadLastActivityMs(thread) > DateTime.toEpochMillis(command.settledBefore)
+          ) {
+            return { events: [], effects: [] };
+          }
+        }
+        yield* dispatchThreadMutation(command, events, effects);
+        break;
+      }
       case "thread.unarchive":
       case "thread.settle":
       case "thread.unsettle":
@@ -15481,7 +15501,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           // Closing a share again, or after it ended, is not an error.
           command.type === "thread.guest-share.close" ||
           (command.type === "thread.delete" &&
-            (command.onlyIfUnused === true || command.settledBefore !== undefined)),
+            (command.onlyIfUnused === true || command.archivedBefore !== undefined)) ||
+          (command.type === "thread.archive" && command.settledBefore !== undefined),
         (_planned) =>
           new OrchestratorDispatchError({
             commandId: command.commandId,

@@ -60,6 +60,7 @@ import * as DateTime from "effect/DateTime";
 import {
   storageCleanupActivityAt,
   storageCleanupPullRequestMerged,
+  storageCleanupArchivedThreadDue,
   storageCleanupSettledThreadDue,
   storageCleanupThreadIdle,
 } from "./storageCleanup.ts";
@@ -374,7 +375,7 @@ const cleanupFixture = (
     let terminalListener: ((event: TerminalMetadataStreamEvent) => Effect.Effect<void>) | undefined;
     let events: Stream.Stream<OrchestrationV2DomainEvent> = Stream.empty;
     const dispatched: OrchestrationV2ServerCommand[] = [];
-    let deleteRefused = false;
+    let dispatchRefused = false;
     let onDispatch: Effect.Effect<void> = Effect.void;
     const activated = yield* Deferred.make<void>();
     const context = yield* Layer.build(StorageCleanup.layer).pipe(
@@ -447,27 +448,27 @@ const cleanupFixture = (
             archivedThreads: [],
           })),
         dispatch: (command: OrchestrationV2ServerCommand) =>
-          command.type === "thread.delete"
+          command.type === "thread.delete" || command.type === "thread.archive"
             ? Effect.suspend(() => {
                 dispatched.push(command);
                 return onDispatch;
               }).pipe(
                 Effect.as({
                   sequence: dispatched.length,
-                  storedEvents: deleteRefused ? [] : [{ type: "thread.deleted" }],
+                  storedEvents: dispatchRefused ? [] : [{ type: "thread.deleted" }],
                 }),
               )
             : Effect.sync(() => {
-            if (command.type === "thread.metadata.update" && command.branch != null) {
-              const branch = command.branch;
-              threads = threads.map((thread) =>
-                thread.id === command.threadId && thread.branch === command.expectedBranch
-                  ? { ...thread, branch }
-                  : thread,
-              );
-            }
-            return { sequence: 0, storedEvents: [] };
-          }),
+                if (command.type === "thread.metadata.update" && command.branch != null) {
+                  const branch = command.branch;
+                  threads = threads.map((thread) =>
+                    thread.id === command.threadId && thread.branch === command.expectedBranch
+                      ? { ...thread, branch }
+                      : thread,
+                  );
+                }
+                return { sequence: 0, storedEvents: [] };
+              }),
       } as unknown as ThreadManagement.ThreadManagementService["Service"]),
       Effect.provideService(GitWorkflowService.GitWorkflowService, {
         currentBranch: (cwd: string) =>
@@ -628,8 +629,8 @@ const cleanupFixture = (
           },
         }) ?? Effect.void,
       dispatched: () => dispatched,
-      setDeleteRefused: (refused: boolean) => {
-        deleteRefused = refused;
+      setDispatchRefused: (refused: boolean) => {
+        dispatchRefused = refused;
       },
       setOnDispatch: (hook: Effect.Effect<void>) => {
         onDispatch = hook;
@@ -3793,11 +3794,18 @@ it.effect("keeps saved usage data when removing a settled checkout", () =>
   ),
 );
 
-describe("settled thread deletion", () => {
+describe("settled thread archive and deletion", () => {
   const settledThread = (overrides: Partial<OrchestrationV2ThreadShell> = {}) =>
     shell({
       settledOverride: "settled",
       settledAt: at(-31 * DAY_MS),
+      updatedAt: at(-31 * DAY_MS),
+      ...overrides,
+    });
+  const archivedThread = (overrides: Partial<OrchestrationV2ThreadShell> = {}) =>
+    settledThread({
+      settledAt: at(-40 * DAY_MS),
+      archivedAt: at(-31 * DAY_MS),
       updatedAt: at(-31 * DAY_MS),
       ...overrides,
     });
@@ -3821,7 +3829,7 @@ describe("settled thread deletion", () => {
   const settledFixture = (storageCleanup: Partial<StorageCleanupSettings> = {}) =>
     cleanupFixture({
       ...DEFAULT_SERVER_SETTINGS.storageCleanup,
-      threadSettledAfterDays: 30,
+      threadArchivedAfterDays: 30,
       ...storageCleanup,
     });
   const threadEntries = (report: { readonly entries: ReadonlyArray<{ readonly kind: string }> }) =>
@@ -3854,18 +3862,109 @@ describe("settled thread deletion", () => {
       },
       due: false,
     },
-  ])("treats a thread $name as due: $due", ({ thread, due }) => {
+  ])("treats a settled thread $name as due for archive: $due", ({ thread, due }) => {
     expect(
       storageCleanupSettledThreadDue(settledThread(thread), NOW_MS, 30, DEFAULT_SERVER_SETTINGS),
     ).toBe(due);
   });
+
+  it.each([
+    { name: "archived 31 days ago", thread: {}, due: true },
+    { name: "archived yesterday", thread: { archivedAt: at(-DAY_MS) }, due: false },
+    { name: "visited yesterday", thread: { lastVisitedAt: at(-DAY_MS) }, due: false },
+    { name: "not archived", thread: { archivedAt: null }, due: false },
+    {
+      name: "unsettled",
+      thread: { settledOverride: "active" as const, settledAt: null },
+      due: true,
+    },
+  ])("treats an archived thread $name as due for deletion: $due", ({ thread, due }) => {
+    expect(
+      storageCleanupArchivedThreadDue(archivedThread(thread), NOW_MS, 30, DEFAULT_SERVER_SETTINGS),
+    ).toBe(due);
+  });
+
+  it.effect("archives a due settled thread and leaves its worktree", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW_MS);
+        const fixture = yield* settledFixture({
+          threadSettledAfterDays: 30,
+          threadArchivedAfterDays: null,
+        });
+        const thread = settledThread({ branch: "feature", worktreePath: fixture.worktree });
+        fixture.setThreads([thread]);
+        const report = yield* fixture.service.runNow;
+        expect(yield* fixture.fs.exists(fixture.worktree)).toBe(true);
+        const [command, ...rest] = fixture.dispatched();
+        expect(rest).toEqual([]);
+        expect(command).toMatchObject({ type: "thread.archive", threadId: thread.id });
+        expect(
+          command?.type === "thread.archive" && command.settledBefore !== undefined
+            ? DateTime.toEpochMillis(command.settledBefore)
+            : null,
+        ).toBe(NOW_MS - 30 * DAY_MS);
+        expect(threadEntries(report)).toEqual([
+          expect.objectContaining({
+            outcome: "removed",
+            reason: "Archived: settled and inactive for 31 days",
+          }),
+        ]);
+      }),
+    ),
+  );
+
+  it.effect("archives and deletes on separate timers in one pass", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW_MS);
+        const fixture = yield* settledFixture({ threadSettledAfterDays: 30 });
+        const settled = settledThread({
+          id: ThreadId.make("thread-2"),
+          lineage: {
+            rootThreadId: ThreadId.make("thread-2"),
+            parentThreadId: null,
+            relationshipToParent: null,
+          },
+        });
+        const archived = archivedThread();
+        fixture.setThreads([settled, archived]);
+        yield* fixture.service.runNow;
+        expect(fixture.dispatched()).toMatchObject([
+          { type: "thread.archive", threadId: settled.id },
+          { type: "thread.delete", threadId: archived.id },
+        ]);
+        expect(fixture.dispatched()).toHaveLength(2);
+      }),
+    ),
+  );
+
+  it.effect("keeps a settled thread with a bound scheduled task out of the archive", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW_MS);
+        const fixture = yield* settledFixture({
+          threadSettledAfterDays: 30,
+          threadArchivedAfterDays: null,
+        });
+        const thread = settledThread();
+        fixture.setThreads([thread]);
+        fixture.setBoundThreads([thread.id]);
+        const report = yield* fixture.service.runNow;
+        expect(fixture.dispatched()).toEqual([]);
+        expect(threadEntries(report)).toEqual([
+          expect.objectContaining({ outcome: "kept", reason: "A scheduled task uses this thread" }),
+        ]);
+      }),
+    ),
+  );
 
   it.effect("deletes a due thread after removing its clean worktree", () =>
     runCleanupTest(
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture();
-        const thread = settledThread({ branch: "feature", worktreePath: fixture.worktree });
+        const thread = archivedThread({ branch: "feature", worktreePath: fixture.worktree });
         fixture.setThreads([thread]);
         const report = yield* fixture.service.runNow;
         expect(yield* fixture.fs.exists(fixture.worktree)).toBe(false);
@@ -3874,8 +3973,8 @@ describe("settled thread deletion", () => {
         expect(command).toMatchObject({ type: "thread.delete", threadId: thread.id });
         expect(command?.commandId.startsWith("server:storage-cleanup:")).toBe(true);
         expect(
-          command?.type === "thread.delete" && command.settledBefore !== undefined
-            ? DateTime.toEpochMillis(command.settledBefore)
+          command?.type === "thread.delete" && command.archivedBefore !== undefined
+            ? DateTime.toEpochMillis(command.archivedBefore)
             : null,
         ).toBe(NOW_MS - 30 * DAY_MS);
         expect(threadEntries(report)).toEqual([
@@ -3895,13 +3994,13 @@ describe("settled thread deletion", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture();
-        fixture.setThreads([settledThread()]);
+        fixture.setThreads([archivedThread()]);
         const report = yield* fixture.service.runNow;
         expect(fixture.dispatched()).toHaveLength(1);
         expect(threadEntries(report)).toEqual([
           expect.objectContaining({
             outcome: "removed",
-            reason: "Settled and inactive for 31 days",
+            reason: "Deleted: archived and inactive for 31 days",
           }),
         ]);
       }),
@@ -3913,7 +4012,7 @@ describe("settled thread deletion", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture();
-        fixture.setThreads([settledThread({ branch: "feature", worktreePath: fixture.worktree })]);
+        fixture.setThreads([archivedThread({ branch: "feature", worktreePath: fixture.worktree })]);
         yield* fixture.fs.writeFileString(`${fixture.worktree}/tracked.txt`, "agent edit\n");
         const report = yield* fixture.service.runNow;
         expect(fixture.dispatched()).toEqual([]);
@@ -3931,7 +4030,7 @@ describe("settled thread deletion", () => {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture();
         fixture.setThreads([
-          settledThread({
+          archivedThread({
             branch: "feature",
             worktreePath: `${fixture.config.worktreesDir}/unmounted/repository/feature`,
           }),
@@ -3950,7 +4049,7 @@ describe("settled thread deletion", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture();
-        const thread = settledThread({ branch: "feature", worktreePath: fixture.worktree });
+        const thread = archivedThread({ branch: "feature", worktreePath: fixture.worktree });
         fixture.setThreads([
           thread,
           shell({
@@ -3979,9 +4078,9 @@ describe("settled thread deletion", () => {
       Effect.gen(function* () {
         const fixture = yield* pausedMeasurementFixture({
           ...DEFAULT_SERVER_SETTINGS.storageCleanup,
-          threadSettledAfterDays: 30,
+          threadArchivedAfterDays: 30,
         });
-        const thread = settledThread({ branch: "feature", worktreePath: fixture.worktree });
+        const thread = archivedThread({ branch: "feature", worktreePath: fixture.worktree });
         fixture.setThreads([thread]);
         const run = yield* fixture.service.runNow.pipe(Effect.forkChild);
         yield* Deferred.await(fixture.measuring);
@@ -4002,9 +4101,9 @@ describe("settled thread deletion", () => {
       Effect.gen(function* () {
         const fixture = yield* pausedMeasurementFixture({
           ...DEFAULT_SERVER_SETTINGS.storageCleanup,
-          threadSettledAfterDays: 30,
+          threadArchivedAfterDays: 30,
         });
-        const thread = settledThread({ branch: "feature", worktreePath: fixture.worktree });
+        const thread = archivedThread({ branch: "feature", worktreePath: fixture.worktree });
         const sideChat = childOf(thread, "side-chat-1", { sideChat: true });
         fixture.setThreads([thread, sideChat]);
         const run = yield* fixture.service.runNow.pipe(Effect.forkChild);
@@ -4037,8 +4136,8 @@ describe("settled thread deletion", () => {
         // Without a worktree, cleanWorktrees' terminal check cannot mask the thread's own.
         const thread =
           exemption === "running terminal"
-            ? settledThread()
-            : settledThread({ branch: "feature", worktreePath: fixture.worktree });
+            ? archivedThread()
+            : archivedThread({ branch: "feature", worktreePath: fixture.worktree });
         fixture.setThreads([
           thread,
           ...(exemption === "non-idle subagent child"
@@ -4077,8 +4176,8 @@ describe("settled thread deletion", () => {
     runCleanupTest(
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW_MS);
-        const fixture = yield* settledFixture({ threadSettledAfterDays: null });
-        fixture.setThreads([settledThread()]);
+        const fixture = yield* settledFixture({ threadArchivedAfterDays: null });
+        fixture.setThreads([archivedThread()]);
         const report = yield* fixture.service.runNow;
         expect(fixture.dispatched()).toEqual([]);
         expect(threadEntries(report)).toEqual([]);
@@ -4091,8 +4190,8 @@ describe("settled thread deletion", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture();
-        fixture.setThreads([settledThread()]);
-        fixture.setDeleteRefused(true);
+        fixture.setThreads([archivedThread()]);
+        fixture.setDispatchRefused(true);
         const report = yield* fixture.service.runNow;
         expect(fixture.dispatched()).toHaveLength(1);
         expect(threadEntries(report)).toEqual([
@@ -4108,8 +4207,8 @@ describe("settled thread deletion", () => {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture();
         fixture.setThreads([
-          settledThread(),
-          settledThread({
+          archivedThread(),
+          archivedThread({
             id: ThreadId.make("thread-2"),
             lineage: {
               rootThreadId: ThreadId.make("thread-2"),
@@ -4123,7 +4222,7 @@ describe("settled thread deletion", () => {
             fixture.setSettings({
               storageCleanup: {
                 ...DEFAULT_SERVER_SETTINGS.storageCleanup,
-                threadSettledAfterDays: null,
+                threadArchivedAfterDays: null,
               },
             }),
           ),
@@ -4139,7 +4238,7 @@ describe("settled thread deletion", () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW_MS);
         const fixture = yield* settledFixture({ worktreeOnDelete: true });
-        const thread = settledThread();
+        const thread = archivedThread();
         fixture.setThreads([thread]);
         const events = yield* Queue.unbounded<{
           readonly event: OrchestrationV2DomainEvent;

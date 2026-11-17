@@ -200,6 +200,21 @@ export function storageCleanupSettledThreadDue(
   );
 }
 
+export function storageCleanupArchivedThreadDue(
+  thread: OrchestrationV2ThreadShell,
+  now: number,
+  days: number,
+  settings: LimitRecoverySettings,
+): boolean {
+  return (
+    isListedThreadLineage(thread.lineage) &&
+    thread.archivedAt !== null &&
+    thread.deletedAt === null &&
+    settledThreadLastActivityMs(thread) <= now - days * DAY_MS &&
+    threadIdle(thread, now, settings)
+  );
+}
+
 // Deleting a thread deletes its side chats, which the decider's guard does not inspect.
 function activeDescendantCheck(
   threads: ReadonlyArray<OrchestrationV2ThreadShell>,
@@ -1441,8 +1456,8 @@ const make = Effect.gen(function* () {
           return (
             currentSettings.autoResumeLimitedThreads !== serverSettings.autoResumeLimitedThreads ||
             currentSettings.snoozeLimitedThreads !== serverSettings.snoozeLimitedThreads ||
-            currentSettings.storageCleanup.threadSettledAfterDays !==
-              serverSettings.storageCleanup.threadSettledAfterDays ||
+            currentSettings.storageCleanup.threadArchivedAfterDays !==
+              serverSettings.storageCleanup.threadArchivedAfterDays ||
             Object.keys(settings).some(
               (key) =>
                 current[key as keyof typeof settings] !== settings[key as keyof typeof settings],
@@ -1697,7 +1712,8 @@ const make = Effect.gen(function* () {
     return new Set(rows.map((row) => row.threadId));
   });
 
-  const settledThreadsDue = Effect.fn("StorageCleanup.settledThreadsDue")(function* (
+  const threadsDue = Effect.fn("StorageCleanup.threadsDue")(function* (
+    stage: "archive" | "delete",
     serverSettings: ServerSettings,
     now: number,
     days: number,
@@ -1707,16 +1723,19 @@ const make = Effect.gen(function* () {
     const cutoff = now - days * DAY_MS;
     const bound = yield* boundThreadIds();
     const activeDescendant = activeDescendantCheck(snapshot.threads, now, cutoff, serverSettings);
+    const isDue =
+      stage === "archive" ? storageCleanupSettledThreadDue : storageCleanupArchivedThreadDue;
     const due: OrchestrationV2ThreadShell[] = [];
     for (const thread of snapshot.threads) {
-      if (!storageCleanupSettledThreadDue(thread, now, days, serverSettings)) continue;
+      if (!isDue(thread, now, days, serverSettings)) continue;
       const exemption = bound.has(thread.id)
         ? "A scheduled task uses this thread"
         : threadHasTerminal(thread.id)
           ? "Open terminal"
           : activeDescendant(thread)
             ? "A subagent or side chat is still active"
-            : thread.worktreePath !== null &&
+            : stage === "delete" &&
+                thread.worktreePath !== null &&
                 serverSettings.projectSettingsOverrides[thread.projectId]?.worktreeCleanup?.mode ===
                   "off"
               ? "Worktree cleanup is off for this project"
@@ -1727,7 +1746,55 @@ const make = Effect.gen(function* () {
     return due;
   });
 
-  const deleteSettledThreads = Effect.fn("StorageCleanup.deleteSettledThreads")(function* (
+  const inactiveDays = (thread: OrchestrationV2ThreadShell, now: number) =>
+    Math.floor((now - settledThreadLastActivityMs(thread)) / DAY_MS);
+
+  const archiveSettledThreads = Effect.fn("StorageCleanup.archiveSettledThreads")(function* (
+    now: number,
+    days: number,
+    snapshot: CleanupSnapshot,
+    due: ReadonlyArray<OrchestrationV2ThreadShell>,
+    entries: StorageCleanupReportEntry[],
+  ) {
+    for (const thread of due) {
+      const current = yield* settingsService.getSettings.pipe(Effect.orElseSucceed(() => null));
+      if (current?.storageCleanup.threadSettledAfterDays !== days) break;
+      yield* threadManagement
+        .dispatch({
+          type: "thread.archive",
+          commandId: CommandId.make(`server:storage-cleanup:archive:${thread.id}:${now}`),
+          threadId: thread.id,
+          settledBefore: DateTime.makeUnsafe(now - days * DAY_MS),
+        })
+        .pipe(
+          Effect.tap((result) =>
+            Effect.sync(() =>
+              entries.push(
+                result.storedEvents.length === 0
+                  ? threadEntry(thread, snapshot, "kept", "Thread changed since check")
+                  : threadEntry(
+                      thread,
+                      snapshot,
+                      "removed",
+                      `Archived: settled and inactive for ${inactiveDays(thread, now)} days`,
+                    ),
+              ),
+            ),
+          ),
+          Effect.catch((error) =>
+            Effect.gen(function* () {
+              entries.push(threadEntry(thread, snapshot, "failed", cleanupFailureReason(error)));
+              yield* Effect.logWarning("storage cleanup failed to archive thread", {
+                threadId: thread.id,
+                error,
+              });
+            }),
+          ),
+        );
+    }
+  });
+
+  const deleteArchivedThreads = Effect.fn("StorageCleanup.deleteArchivedThreads")(function* (
     serverSettings: ServerSettings,
     now: number,
     days: number,
@@ -1746,7 +1813,7 @@ const make = Effect.gen(function* () {
     const deleted = new Set<ThreadId>();
     for (const thread of due) {
       const current = yield* settingsService.getSettings.pipe(Effect.orElseSucceed(() => null));
-      if (current?.storageCleanup.threadSettledAfterDays !== days) break;
+      if (current?.storageCleanup.threadArchivedAfterDays !== days) break;
       const keep = (reason: string) => entries.push(threadEntry(thread, snapshot, "kept", reason));
       yield* Effect.gen(function* () {
         if (bound.has(thread.id)) return keep("A scheduled task uses this thread");
@@ -1780,7 +1847,7 @@ const make = Effect.gen(function* () {
             type: "thread.delete",
             commandId: CommandId.make(`server:storage-cleanup:${thread.id}:${now}`),
             threadId: thread.id,
-            settledBefore: DateTime.makeUnsafe(now - days * DAY_MS),
+            archivedBefore: DateTime.makeUnsafe(now - days * DAY_MS),
           })
           .pipe(Effect.onError(() => Effect.sync(() => selfDeleted.delete(thread.id))));
         if (result.storedEvents.length === 0) {
@@ -1793,10 +1860,10 @@ const make = Effect.gen(function* () {
             thread,
             snapshot,
             "removed",
-            `Settled and inactive for ${Math.floor((now - settledThreadLastActivityMs(thread)) / DAY_MS)} days`,
+            `Deleted: archived and inactive for ${inactiveDays(thread, now)} days`,
           ),
         );
-        yield* Effect.logInfo("storage cleanup deleted settled thread", {
+        yield* Effect.logInfo("storage cleanup deleted archived thread", {
           threadId: thread.id,
           threadTitle: thread.title,
           projectId: thread.projectId,
@@ -1980,7 +2047,8 @@ const make = Effect.gen(function* () {
     yield* cleanCheckpointRefs().pipe(
       Effect.catch((cause) => Effect.logWarning("checkpoint ref cleanup failed", { cause })),
     );
-    const days = settings.threadSettledAfterDays;
+    const archiveDays = settings.threadSettledAfterDays;
+    const days = settings.threadArchivedAfterDays;
     const failed =
       (kind: "worktree" | "thread", message: string) => (error: { readonly message: string }) =>
         Effect.gen(function* () {
@@ -1997,13 +2065,16 @@ const make = Effect.gen(function* () {
           });
           yield* Effect.logWarning(message, { error });
         });
-    const readsThreads = days !== null || anyWorktreePolicy(serverSettings, worktreeCleanupEnabled);
+    const readsThreads =
+      days !== null ||
+      archiveDays !== null ||
+      anyWorktreePolicy(serverSettings, worktreeCleanupEnabled);
     const snapshot = !readsThreads
       ? null
       : yield* readThreads().pipe(
           Effect.catch((error) =>
             failed(
-              days === null ? "worktree" : "thread",
+              days === null && archiveDays === null ? "worktree" : "thread",
               "storage cleanup snapshot failed",
             )(error).pipe(Effect.as(null)),
           ),
@@ -2011,11 +2082,18 @@ const make = Effect.gen(function* () {
     const due =
       days === null || snapshot === null
         ? []
-        : yield* settledThreadsDue(serverSettings, now, days, snapshot, entries).pipe(
+        : yield* threadsDue("delete", serverSettings, now, days, snapshot, entries).pipe(
             Effect.catch((error) =>
-              failed("thread", "settled thread cleanup failed")(error).pipe(Effect.as([])),
+              failed("thread", "archived thread cleanup failed")(error).pipe(Effect.as([])),
             ),
           );
+    if (archiveDays !== null && snapshot !== null)
+      yield* threadsDue("archive", serverSettings, now, archiveDays, snapshot, entries).pipe(
+        Effect.flatMap((archiveDue) =>
+          archiveSettledThreads(now, archiveDays, snapshot, archiveDue, entries),
+        ),
+        Effect.catch(failed("thread", "settled thread archive failed")),
+      );
     const deletedWorktrees =
       snapshot === null
         ? { waiting: readsThreads, kept: [] }
@@ -2034,8 +2112,8 @@ const make = Effect.gen(function* () {
             ),
           );
     if (days !== null && snapshot !== null && due.length > 0)
-      yield* deleteSettledThreads(serverSettings, now, days, snapshot, due, entries).pipe(
-        Effect.catch(failed("thread", "settled thread cleanup failed")),
+      yield* deleteArchivedThreads(serverSettings, now, days, snapshot, due, entries).pipe(
+        Effect.catch(failed("thread", "archived thread cleanup failed")),
       );
     deletedWorktreeWaits = deletedWorktrees.waiting;
     keptDeletedWorktrees = deletedWorktrees.kept;

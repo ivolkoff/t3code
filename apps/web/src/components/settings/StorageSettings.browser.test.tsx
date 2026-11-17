@@ -110,6 +110,7 @@ function setup() {
       browserArtifactsAfterDays: null,
       logsAfterDays: null,
       threadSettledAfterDays: null,
+      threadArchivedAfterDays: null,
     },
     projectSettingsOverrides: {},
   };
@@ -182,12 +183,21 @@ const pressDialogButton = (name: string) =>
       .click();
   });
 
-const pickRetention = async (name: string) => {
-  await userEvent.click(page.getByRole("combobox", { name: "Delete settled threads" }));
+const pickRetention = async (name: string, label = "Delete archived threads") => {
+  await userEvent.click(page.getByRole("combobox", { name: label }));
   await userEvent.click(page.getByRole("option", { name }));
 };
 
-it("asks before enabling settled thread deletion", async () => {
+it("archives settled threads without asking", async () => {
+  setup();
+  await using _screen = await render(panel());
+
+  await pickRetention("30 days", "Archive settled threads");
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadSettledAfterDays: 30 } });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("asks before enabling archived thread deletion", async () => {
   setup();
   await using _screen = await render(panel());
 
@@ -199,7 +209,7 @@ it("asks before enabling settled thread deletion", async () => {
 
   await pickRetention("30 days");
   await pressDialogButton("Delete threads");
-  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadSettledAfterDays: 30 } });
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadArchivedAfterDays: 30 } });
 });
 
 it("writes only a committed number from Custom…", async () => {
@@ -208,7 +218,7 @@ it("writes only a committed number from Custom…", async () => {
 
   await pickRetention("Custom…");
   expect(state.update).not.toHaveBeenCalled();
-  const days = page.getByRole("textbox", { name: "Delete settled threads in days" });
+  const days = page.getByRole("textbox", { name: "Delete archived threads in days" });
   await userEvent.type(days, "1{Tab}");
   await expect.element(page.getByText(/more than 1 day on/)).toBeVisible();
   await pressDialogButton("Cancel");
@@ -216,14 +226,14 @@ it("writes only a committed number from Custom…", async () => {
   await userEvent.type(days, "45{Tab}");
   await expect.element(page.getByText(/more than 45 days/)).toBeVisible();
   await pressDialogButton("Delete threads");
-  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadSettledAfterDays: 45 } });
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadArchivedAfterDays: 45 } });
 });
 
-it("turns settled thread deletion off without asking", async () => {
+it("turns archived thread deletion off without asking", async () => {
   setup();
   state.settings = {
     ...state.settings,
-    storageCleanup: { ...state.settings.storageCleanup, threadSettledAfterDays: 30 },
+    storageCleanup: { ...state.settings.storageCleanup, threadArchivedAfterDays: 30 },
   };
   state.targets = state.targets.map(({ environmentId }) => ({
     environmentId,
@@ -232,15 +242,15 @@ it("turns settled thread deletion off without asking", async () => {
   await using _screen = await render(panel());
 
   await pickRetention("Off");
-  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadSettledAfterDays: null } });
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadArchivedAfterDays: null } });
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
 it("asks when another machine would start deleting", async () => {
   setup();
-  const withDays = (threadSettledAfterDays: number | null) => ({
+  const withDays = (threadArchivedAfterDays: number | null) => ({
     ...state.settings,
-    storageCleanup: { ...state.settings.storageCleanup, threadSettledAfterDays },
+    storageCleanup: { ...state.settings.storageCleanup, threadArchivedAfterDays },
   });
   state.targets = [
     { environmentId: "env-a", settings: withDays(7) },

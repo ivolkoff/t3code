@@ -1348,6 +1348,9 @@ export const StorageCleanupSettings = Schema.Struct({
   threadSettledAfterDays: StorageRetentionDays.pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  threadArchivedAfterDays: StorageRetentionDays.pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
 });
 export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
@@ -1842,6 +1845,7 @@ export const ServerSettingsPatch = Schema.Struct({
       browserArtifactsAfterDays: Schema.optionalKey(StorageRetentionDays),
       logsAfterDays: Schema.optionalKey(StorageRetentionDays),
       threadSettledAfterDays: Schema.optionalKey(StorageRetentionDays),
+      threadArchivedAfterDays: Schema.optionalKey(StorageRetentionDays),
     }),
   ),
   worktreesDirectory: Schema.optionalKey(TrimmedString),

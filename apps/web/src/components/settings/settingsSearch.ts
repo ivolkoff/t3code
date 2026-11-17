@@ -267,7 +267,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/maintenance",
     scope: "environment-defaults",
     searchTerms: [
-      "disk storage delete old browser artifacts screenshots captures rotated logs cleanup retention delete settled threads",
+      "disk storage delete old browser artifacts screenshots captures rotated logs cleanup retention archive settled threads delete archived threads",
     ],
   },
   {
