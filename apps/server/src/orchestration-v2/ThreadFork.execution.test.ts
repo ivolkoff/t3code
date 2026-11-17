@@ -1169,6 +1169,121 @@ it.effect("closing a side chat deletes it only while unused; a deleted parent ta
   }).pipe(Effect.provide(forkCases[0]!.layer)),
 );
 
+it.effect("automatic archive and deletion skip a thread changed since its cutoff", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const settled = (name: string) =>
+      Effect.gen(function* () {
+        const threadId = ThreadId.make(`auto-cleanup-${name}`);
+        yield* createParent(threadId);
+        yield* writeParentRun({
+          threadId,
+          runId: RunId.make(`auto-cleanup-${name}-run`),
+          ordinal: 1,
+          status: "completed",
+          text: "Work",
+          stable: true,
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make(`auto-cleanup-${name}-settle`),
+          threadId,
+        });
+        return threadId;
+      });
+    const thread = (threadId: ThreadId) =>
+      orchestrator.getThreadProjection(threadId).pipe(Effect.map(({ thread }) => thread));
+    const cutoff = (threadId: ThreadId) =>
+      thread(threadId).pipe(
+        Effect.map((thread) =>
+          Math.max(
+            ...[
+              thread.settledAt,
+              thread.archivedAt,
+              thread.updatedAt,
+              thread.lastVisitedAt,
+            ].flatMap((at) => (at === null ? [] : [DateTime.toEpochMillis(at)])),
+          ),
+        ),
+      );
+    let attempt = 0;
+    const autoArchive = (threadId: ThreadId, settledBefore: number) =>
+      orchestrator.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make(`auto-archive:${threadId}:${++attempt}`),
+        threadId,
+        settledBefore: DateTime.makeUnsafe(settledBefore),
+      });
+    const autoDelete = (threadId: ThreadId, archivedBefore: number) =>
+      orchestrator.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.make(`auto-delete:${threadId}:${++attempt}`),
+        threadId,
+        archivedBefore: DateTime.makeUnsafe(archivedBefore),
+      });
+    const archivedAt = (threadId: ThreadId) =>
+      thread(threadId).pipe(Effect.map((thread) => thread.archivedAt));
+    const deletedAt = (threadId: ThreadId) =>
+      thread(threadId).pipe(Effect.map((thread) => thread.deletedAt));
+
+    const a = yield* settled("a");
+    yield* autoDelete(a, yield* cutoff(a));
+    assert.isNull(yield* deletedAt(a), "an unarchived thread is not deleted");
+    yield* autoArchive(a, (yield* cutoff(a)) - 1);
+    assert.isNull(yield* archivedAt(a), "activity after the cutoff keeps it");
+    yield* autoArchive(a, yield* cutoff(a));
+    assert.isNotNull(yield* archivedAt(a));
+    yield* autoDelete(a, (yield* cutoff(a)) - 1);
+    assert.isNull(yield* deletedAt(a), "archived after the cutoff");
+    yield* autoDelete(a, yield* cutoff(a));
+    assert.isNotNull(yield* deletedAt(a));
+
+    const b = yield* settled("b");
+    yield* orchestrator.dispatch({
+      type: "thread.unsettle",
+      commandId: CommandId.make("auto-cleanup-b-unsettle"),
+      threadId: b,
+      reason: "user",
+    });
+    yield* autoArchive(b, yield* cutoff(b));
+    assert.isNull(yield* archivedAt(b));
+
+    const c = yield* settled("c");
+    yield* orchestrator.dispatch({
+      type: "thread.archive",
+      commandId: CommandId.make("auto-cleanup-c-archive"),
+      threadId: c,
+    });
+    const refusedArchive = yield* autoArchive(c, yield* cutoff(c));
+    assert.strictEqual(refusedArchive.storedEvents.length, 0, "already archived is not an error");
+    const archivedCutoff = yield* cutoff(c);
+    yield* TestClock.adjust("1 hour");
+    const visitedAt = yield* thread(c).pipe(
+      Effect.map((thread) => DateTime.formatIso(thread.updatedAt)),
+    );
+    yield* orchestrator.dispatch({
+      type: "thread.visit",
+      commandId: CommandId.make("auto-cleanup-c-visit"),
+      threadId: c,
+      visitedAt,
+      opened: true,
+    });
+    const refusedDelete = yield* autoDelete(c, archivedCutoff);
+    assert.strictEqual(refusedDelete.storedEvents.length, 0);
+    assert.isNull(yield* deletedAt(c), "opened since it was archived");
+
+    const d = yield* settled("d");
+    yield* orchestrator.dispatch({
+      type: "thread.snooze",
+      commandId: CommandId.make("auto-cleanup-d-snooze"),
+      threadId: d,
+      snoozedUntil: DateTime.formatIso(DateTime.add(yield* DateTime.now, { days: 7 })),
+    });
+    yield* autoArchive(d, yield* cutoff(d));
+    assert.isNull(yield* archivedAt(d));
+  }).pipe(Effect.provide(forkCases[0]!.layer)),
+);
+
 it.effect("a side chat opened during the parent's first turn starts from a digest", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
