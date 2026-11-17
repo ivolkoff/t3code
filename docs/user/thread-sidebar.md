@@ -180,11 +180,11 @@ and `private`. In the same settings page you can give each tag a color and move 
 tags show in that order everywhere, and tags you have not placed follow alphabetically. Order
 and colors are saved on the machine, so every device connected to it agrees.
 
-To show only tagged threads, pick a tag from the tag control in the sidebar header or
-from **Filter sidebar by tag** in the command palette. On web and desktop, each click in
-the sidebar's tag list checks or unchecks a tag and the list stays open; the sidebar
-shows threads with any of the checked tags. Clear the
-filter with its **×** button, **All tags**, or **Clear tag filter**. On mobile, use the
+To show only tagged threads, pick a tag in the sidebar's filter menu, which lists tags
+below projects and searches both, or use **Filter sidebar by tag** in the command palette.
+On web and desktop, a click picks one tag; Shift+click adds or removes a tag and keeps the
+menu open. The sidebar shows threads with any of the picked tags, inside the picked
+projects. Clear the filter with its **×** button or **Clear tag filter**. On mobile, use the
 **Tag** option in the thread list's filter menu, and choose **All tags** to clear it.
 Each device remembers its own filter.
 

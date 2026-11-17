@@ -10,7 +10,13 @@ import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { openThreadTagPicker } from "../state/threadTagPicker";
 import { useSidebarTagFilter } from "../hooks/useSidebarTagFilter";
-import { SidebarTagFilterBar, SidebarTagFilterMenu } from "./sidebar/SidebarTagFilter";
+import { SidebarTagFilterBar } from "./sidebar/SidebarTagFilter";
+import {
+  isSidebarTagFilterItem,
+  nextSidebarTagFilter,
+  sidebarTagFilterItems,
+  tagFilterIncludes,
+} from "./sidebar/SidebarTagFilter.logic";
 import {
   collectThreadTags,
   filterThreadsByTag,
@@ -80,8 +86,10 @@ import {
   ListFilterIcon,
   PlusIcon,
   SettingsIcon,
+  TagIcon,
 } from "lucide-react";
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useReducer,
@@ -1208,8 +1216,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       ? null
       : (projectScopeItems.find((item) => item.value === (projectScopeKeys[0] ?? "all")) ??
         projectScopeItems[0]!);
+  const tagFilterItems = tagsSupported ? sidebarTagFilterItems(knownTags, tagFilter) : [];
+  const scopeFilterItems = [...projectScopeItems, ...tagFilterItems];
   const filteredProjectScopeItems = filterSidebarProjectScopeItems({
-    items: projectScopeItems,
+    items: scopeFilterItems,
     query: projectScopeMenuState.query,
     matches: (item, query) =>
       projectScopeFilter.contains(item, query, (candidate) => candidate.label),
@@ -3012,21 +3022,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
-              tagFilterMenu={
-                tagsSupported ? (
-                  <SidebarTagFilterMenu
-                    tags={knownTags}
-                    active={tagFilter}
-                    onChange={setTagFilter}
-                  />
-                ) : null
-              }
               tagFilterBar={
                 <SidebarTagFilterBar active={tagFilter} onClear={() => setTagFilter([])} />
               }
               projectScope={
                 <Combobox
-                  items={projectScopeItems}
+                  items={scopeFilterItems}
                   filteredItems={filteredProjectScopeItems}
                   autoHighlight
                   itemToStringLabel={(item) => item.label}
@@ -3047,6 +3048,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       return;
                     }
                     if (!item) return;
+                    if (isSidebarTagFilterItem(item)) {
+                      const additive =
+                        "shiftKey" in eventDetails.event && eventDetails.event.shiftKey === true;
+                      if (additive) eventDetails.cancel();
+                      setTagFilter(nextSidebarTagFilter(tagFilter, item.tag, additive));
+                      return;
+                    }
                     if (item.value === "all") {
                       setProjectScopeKeys([]);
                     } else if (
@@ -3064,11 +3072,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   <ComboboxTrigger
                     render={
                       <SidebarHeaderIconButton
-                        label={
+                        label={`${
                           scopedProjectGroups.length > 0
                             ? `Filter threads by project: ${scopedProjectGroups.map((project) => project.displayName).join(", ")}`
                             : "Filter threads by project"
-                        }
+                        }${tagFilter.length > 0 ? `; tag: ${tagFilter.join(", ")}` : ""}`}
                       />
                     }
                   >
@@ -3091,6 +3099,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       <span className="flex shrink-0">
                         <ProjectFavicon project={scopedProjectGroups[0]} className="size-4" />
                       </span>
+                    ) : tagFilter.length > 0 ? (
+                      <TagIcon className="size-4" />
                     ) : (
                       <ListFilterIcon className="size-4" />
                     )}
@@ -3103,8 +3113,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     finalFocus={(closeType) => closeType === "keyboard"}
                   >
                     <ComboboxSearchInput
-                      aria-label="Search projects"
-                      placeholder="Search projects..."
+                      aria-label={
+                        tagFilterItems.length > 0 ? "Search projects and tags" : "Search projects"
+                      }
+                      placeholder={
+                        tagFilterItems.length > 0
+                          ? "Search projects and tags..."
+                          : "Search projects..."
+                      }
                       value={projectScopeMenuState.query}
                       onKeyDown={(event) => {
                         if (
@@ -3129,6 +3145,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         }
                         if (event.ctrlKey || event.altKey || event.metaKey) return;
                         if (event.shiftKey && event.key === "Enter") {
+                          const tagItem = tagFilterItems.find((item) => item.value === scopeKey);
+                          if (tagItem) {
+                            event.preventDefault();
+                            setTagFilter(nextSidebarTagFilter(tagFilter, tagItem.tag, true));
+                            return;
+                          }
                           if (!project) return;
                           event.preventDefault();
                           toggleProjectScopeKey(project.projectKey);
@@ -3149,9 +3171,41 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         })
                       }
                     />
-                    <ComboboxEmpty>No matching projects.</ComboboxEmpty>
+                    <ComboboxEmpty>
+                      {tagFilterItems.length > 0
+                        ? "No matching projects or tags."
+                        : "No matching projects."}
+                    </ComboboxEmpty>
                     <ComboboxList aria-multiselectable>
-                      {(item: (typeof projectScopeItems)[number]) => {
+                      {(item: (typeof scopeFilterItems)[number], index: number) => {
+                        if (isSidebarTagFilterItem(item)) {
+                          const isSelected = tagFilterIncludes(tagFilter, item.tag);
+                          const previous = filteredProjectScopeItems[index - 1];
+                          return (
+                            <Fragment key={item.value}>
+                              {previous === undefined || !isSidebarTagFilterItem(previous) ? (
+                                <div
+                                  aria-hidden
+                                  className="px-2 pt-2 pb-1 font-medium text-muted-foreground text-xs"
+                                >
+                                  Tags
+                                </div>
+                              ) : null}
+                              <ComboboxItem
+                                hideIndicator
+                                value={item}
+                                aria-selected={isSelected}
+                                data-selected={undefined}
+                              >
+                                <ProjectScopeRowIcon isSelected={isSelected}>
+                                  <TagIcon className="size-4 shrink-0" />
+                                </ProjectScopeRowIcon>
+                                <span className="min-w-0 truncate text-sm">{item.label}</span>
+                                <span className="ml-auto size-7 shrink-0 sm:size-6" />
+                              </ComboboxItem>
+                            </Fragment>
+                          );
+                        }
                         const project = projectGroupByScopeKey.get(item.value) ?? null;
                         const isSelected = project
                           ? projectScopeKeys.includes(item.value)
