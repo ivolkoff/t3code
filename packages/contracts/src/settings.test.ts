@@ -154,13 +154,19 @@ describe("ServerSettings usage price overrides", () => {
   });
 });
 
-it("drops a hand-edited non-string hidden tag and keeps the rest of the settings", () => {
+it("drops hand-edited bad tag entries and keeps the rest of the settings", () => {
   const settings = decodeServerSettings({
     hiddenThreadTags: ["private", 123],
     hideTaggedThreads: true,
+    paceHoldTagThresholds: [
+      { tag: "critical", aheadPercent: 15 },
+      { tag: "low", aheadPercent: 150 },
+      "x",
+    ],
   });
   expect(settings.hiddenThreadTags).toEqual(["private"]);
   expect(settings.hideTaggedThreads).toBe(true);
+  expect(settings.paceHoldTagThresholds).toEqual([{ tag: "critical", aheadPercent: 15 }]);
 });
 
 describe("ServerSettings secret providers", () => {

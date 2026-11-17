@@ -8390,6 +8390,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
             id: sqlShell.id,
             status: sqlShell.status,
             lastErrorClass: sqlShell.lastErrorClass,
+            lastErrorCode: sqlShell.lastErrorCode,
             usageLimitResetAt: sqlShell.usageLimitResetAt,
             latestRunId: sqlShell.latestRunId,
             latestRunCompletedAt: sqlShell.latestRunCompletedAt,
@@ -8567,6 +8568,19 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
           (row) => row.id === threadId,
         ),
       );
+      // A pace hold resumes on its own, with auto-resume off.
+      yield* sql`UPDATE orchestration_v2_projection_turn_items
+        SET payload_json = json_set(payload_json, '$.failure.code', 'pace_hold')
+        WHERE turn_item_id = ${limitItem.id}`;
+      assert.equal(
+        (yield* store.getLimitRecoveryCandidates(recoveryOptions)).find(
+          (row) => row.id === threadId,
+        )?.lastErrorCode,
+        "pace_hold",
+      );
+      yield* sql`UPDATE orchestration_v2_projection_turn_items
+        SET payload_json = json_set(payload_json, '$.failure.code', ${limitItem.failure.code})
+        WHERE turn_item_id = ${limitItem.id}`;
       const reset = DateTime.makeUnsafe(limitItem.failure.resetAt);
       const recovery = {
         runId: original.id,
