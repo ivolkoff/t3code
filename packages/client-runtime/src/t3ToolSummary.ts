@@ -1207,6 +1207,23 @@ export function summarizeT3ToolCalls(
           );
       break;
     }
+    case "terminal": {
+      const count = selected.length;
+      label = done
+        ? resolve(
+            msg(
+              "{count, plural, one {Used a terminal {count} time} other {Used a terminal {count} times}}",
+              { count },
+            ),
+          )
+        : resolve(
+            msg(
+              "{count, plural, one {Tried to use a terminal {count} time} other {Tried to use a terminal {count} times}}",
+              { count },
+            ),
+          );
+      break;
+    }
     case "capabilities": {
       const count = selected.length;
       label = done
