@@ -72,6 +72,8 @@ import {
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
+import * as TerminalHandlers from "./toolkits/terminal/handlers.ts";
+import { TerminalToolkit } from "./toolkits/terminal/tools.ts";
 import * as WorktreeHandlers from "./toolkits/worktree/handlers.ts";
 import { WorktreeToolkit } from "./toolkits/worktree/tools.ts";
 import * as WorktreeMcpService from "./WorktreeMcpService.ts";
@@ -1262,6 +1264,8 @@ export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandl
 
 const layerMessageToolkit = toolkitRegistration(MessageToolkit, MessageHandlers.layer);
 
+const layerTerminalToolkit = toolkitRegistration(TerminalToolkit, TerminalHandlers.layer);
+
 const layerWorktreeToolkitRegistration = toolkitRegistration(
   WorktreeToolkit,
   WorktreeHandlers.layer,
@@ -1349,6 +1353,7 @@ export const layerTools = Layer.mergeAll(
   layerThemeToolkit,
   layerPreviewControlsRegistration,
   layerWorktreeToolkitRegistration,
+  layerTerminalToolkit,
   layerPullRequestsToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,
