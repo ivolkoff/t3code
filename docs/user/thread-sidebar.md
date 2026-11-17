@@ -210,7 +210,7 @@ rules to connected environments that support shared settings. Offline environmen
 and older servers keep their previous values. Changing a rule does not reopen
 already settled threads.
 
-Settled threads can also be deleted automatically after a retention period; see Storage cleanup in [Project settings](project-settings.md#storage-cleanup).
+Settled threads can also be archived automatically, and archived threads deleted, each after its own period; see Storage cleanup in [Project settings](project-settings.md#storage-cleanup).
 
 ## Link a pull request
 

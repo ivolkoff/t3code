@@ -68,6 +68,7 @@ describe("storage cleanup settings", () => {
       browserArtifactsAfterDays: null,
       logsAfterDays: null,
       threadSettledAfterDays: null,
+      threadArchivedAfterDays: null,
     });
   });
 
@@ -127,8 +128,12 @@ describe("storage cleanup settings", () => {
     expect(() =>
       decodeServerSettingsPatch({ storageCleanup: { worktreeKeepWhen: "unknown" } }),
     ).toThrow();
-    expect(decodeServerSettingsPatch({ storageCleanup: { threadSettledAfterDays: 30 } })).toEqual({
-      storageCleanup: { threadSettledAfterDays: 30 },
+    expect(
+      decodeServerSettingsPatch({
+        storageCleanup: { threadSettledAfterDays: 30, threadArchivedAfterDays: 90 },
+      }),
+    ).toEqual({
+      storageCleanup: { threadSettledAfterDays: 30, threadArchivedAfterDays: 90 },
     });
   });
 });

@@ -2368,17 +2368,17 @@ export function isOlderSettledThreadShell(
   );
 }
 
-/** Epoch ms of a settled thread's last activity: settle, update, visit, open, or snooze wake. */
+/** Epoch ms of a thread's last activity: settle, archive, update, visit, open, or snooze wake. */
 export function settledThreadLastActivityMs(
   thread: Pick<
     OrchestrationV2ThreadShell,
-    "settledAt" | "updatedAt" | "lastVisitedAt" | "opens" | "snoozedUntil"
+    "settledAt" | "archivedAt" | "updatedAt" | "lastVisitedAt" | "opens" | "snoozedUntil"
   >,
 ): number {
   return Math.max(
     DateTime.toEpochMillis(thread.updatedAt),
-    ...[thread.settledAt, thread.lastVisitedAt, thread.snoozedUntil].flatMap((at) =>
-      at == null ? [] : [DateTime.toEpochMillis(at)],
+    ...[thread.settledAt, thread.archivedAt, thread.lastVisitedAt, thread.snoozedUntil].flatMap(
+      (at) => (at == null ? [] : [DateTime.toEpochMillis(at)]),
     ),
     thread.opens?.openedAt ?? 0,
   );
@@ -3197,6 +3197,8 @@ export const OrchestrationV2Command = Schema.Union([
     type: Schema.Literal("thread.archive"),
     commandId: CommandId,
     threadId: ThreadId,
+    /** Automatic cleanup: archive only a thread still settled and unarchived whose last activity is at or before this time; otherwise succeed without a change. */
+    settledBefore: Schema.optional(Schema.DateTimeUtc),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.guest-share.close"),
@@ -3220,8 +3222,8 @@ export const OrchestrationV2Command = Schema.Union([
     threadId: ThreadId,
     /** Delete only a thread with no runs and no messages; otherwise succeed without a change. */
     onlyIfUnused: Schema.optional(Schema.Boolean),
-    /** Automatic cleanup: delete only a thread still settled and unarchived whose last activity (settle, update, visit, open, snooze wake) is at or before this time; otherwise succeed without a change. */
-    settledBefore: Schema.optional(Schema.DateTimeUtc),
+    /** Automatic cleanup: delete only a thread still archived whose last activity (archive, update, visit, open) is at or before this time; otherwise succeed without a change. */
+    archivedBefore: Schema.optional(Schema.DateTimeUtc),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.settle"),
