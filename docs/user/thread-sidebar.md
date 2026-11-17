@@ -176,15 +176,18 @@ To rename or delete a tag everywhere, open **Settings → Threads → Tags** on 
 renaming onto an existing tag merges the two.
 
 Three tags are always offered, even before any thread carries them: `critical`, `background`,
-and `private`. In the same settings page you can give each tag a color and move it up or down;
+and `private`. Besides those and the tags you placed in settings, the tag picker only suggests
+tags of threads that are not settled or archived. In the same settings page you can give each tag a color and move it up or down;
 tags show in that order everywhere, and tags you have not placed follow alphabetically. Order
 and colors are saved on the machine, so every device connected to it agrees.
 
-To show only tagged threads, pick a tag from the tag control in the sidebar header or
-from **Filter sidebar by tag** in the command palette. On web and desktop, each click in
-the sidebar's tag list checks or unchecks a tag and the list stays open; the sidebar
-shows threads with any of the checked tags. Clear the
-filter with its **×** button, **All tags**, or **Clear tag filter**. On mobile, use the
+To show only tagged threads, pick a tag in the sidebar's filter menu, which lists tags
+below projects and searches both, or use **Filter sidebar by tag** in the command palette.
+On web and desktop, a click picks one tag; Shift+click adds or removes a tag and keeps the
+menu open. The sidebar shows threads with any of the picked tags, inside the picked
+projects. Typing a project or tag name in the sidebar search on web and desktop also lists
+it above matching threads; pick it to filter the same way. Clear the filter with its **×**
+button or **Clear tag filter**. On mobile, use the
 **Tag** option in the thread list's filter menu, and choose **All tags** to clear it.
 Each device remembers its own filter.
 

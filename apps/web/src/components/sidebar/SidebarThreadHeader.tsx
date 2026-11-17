@@ -15,7 +15,6 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 export interface SidebarThreadHeaderProps {
   hasProjects: boolean;
   projectScope: ReactNode;
-  tagFilterMenu?: ReactNode;
   tagFilterBar?: ReactNode;
   onNewProject: () => void;
   onNewThread: (event: ReactMouseEvent) => void;
@@ -36,7 +35,6 @@ export interface SidebarThreadHeaderProps {
 export function SidebarThreadHeader({
   hasProjects,
   projectScope,
-  tagFilterMenu,
   tagFilterBar,
   onNewProject,
   onNewThread,
@@ -72,8 +70,8 @@ export function SidebarThreadHeader({
             value={searchQuery}
             onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
             onKeyDown={onSearchKeyDown}
-            placeholder="Search"
-            aria-label="Search threads"
+            placeholder="Search threads, projects, tags"
+            aria-label="Search threads, projects and tags"
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={resultsVisible}
@@ -105,7 +103,6 @@ export function SidebarThreadHeader({
           {hasProjects ? (
             <>
               {projectScope}
-              {tagFilterMenu}
               <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
                 <FolderPlusIcon />
               </SidebarHeaderIconButton>
