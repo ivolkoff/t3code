@@ -88,6 +88,7 @@ import * as SecretResolver from "./secrets/SecretResolver.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as TerminalAgentService from "./terminal/TerminalAgentService.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as PeerForwarding from "./peer/PeerForwarding.ts";
 import * as RemoteDelegation from "./peer/RemoteDelegation.ts";
@@ -525,12 +526,14 @@ const layerPortScanner = PortScanner.layer.pipe(
   Layer.provide(layerBackground),
 );
 
-const layerTerminal = TerminalManager.layer(
-  ProviderInstanceRegistryHydration.deriveProviderInstanceConfigMap,
-).pipe(
-  Layer.provide(layerPtyAdapter),
-  Layer.provide(layerPortScanner),
-  Layer.provide(layerNativeTelemetry),
+const layerTerminal = TerminalAgentService.layer.pipe(
+  Layer.provideMerge(
+    TerminalManager.layer(ProviderInstanceRegistryHydration.deriveProviderInstanceConfigMap).pipe(
+      Layer.provide(layerPtyAdapter),
+      Layer.provide(layerPortScanner),
+      Layer.provide(layerNativeTelemetry),
+    ),
+  ),
 );
 
 const layerPreview = Layer.empty.pipe(
