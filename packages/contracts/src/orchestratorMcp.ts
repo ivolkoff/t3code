@@ -961,6 +961,7 @@ export class OrchestratorMcpFailure extends Schema.TaggedError<OrchestratorMcpFa
       "orchestration_error",
       "thread_credential_required",
       "target_required",
+      "terminal_not_found",
     ]),
     message: Schema.String,
   },
