@@ -1470,16 +1470,16 @@ it.effect(
     }).pipe(Effect.provide(forkCases[0]!.layer)),
 );
 
-it.effect("automatic deletion skips a thread changed since its cutoff", () =>
+it.effect("automatic archive and deletion skip a thread changed since its cutoff", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const settled = (name: string) =>
       Effect.gen(function* () {
-        const threadId = ThreadId.make(`auto-delete-${name}`);
+        const threadId = ThreadId.make(`auto-cleanup-${name}`);
         yield* createParent(threadId);
         yield* writeParentRun({
           threadId,
-          runId: RunId.make(`auto-delete-${name}-run`),
+          runId: RunId.make(`auto-cleanup-${name}-run`),
           ordinal: 1,
           status: "completed",
           text: "Work",
@@ -1487,86 +1487,101 @@ it.effect("automatic deletion skips a thread changed since its cutoff", () =>
         });
         yield* orchestrator.dispatch({
           type: "thread.settle",
-          commandId: CommandId.make(`auto-delete-${name}-settle`),
+          commandId: CommandId.make(`auto-cleanup-${name}-settle`),
           threadId,
         });
         return threadId;
       });
+    const thread = (threadId: ThreadId) =>
+      orchestrator.getThreadProjection(threadId).pipe(Effect.map(({ thread }) => thread));
     const cutoff = (threadId: ThreadId) =>
-      orchestrator
-        .getThreadProjection(threadId)
-        .pipe(
-          Effect.map(({ thread }) =>
-            Math.max(
-              ...[thread.settledAt, thread.updatedAt, thread.lastVisitedAt].flatMap((at) =>
-                at === null ? [] : [DateTime.toEpochMillis(at)],
-              ),
-            ),
+      thread(threadId).pipe(
+        Effect.map((thread) =>
+          Math.max(
+            ...[
+              thread.settledAt,
+              thread.archivedAt,
+              thread.updatedAt,
+              thread.lastVisitedAt,
+            ].flatMap((at) => (at === null ? [] : [DateTime.toEpochMillis(at)])),
           ),
-        );
-    const autoDelete = (threadId: ThreadId, settledBefore: number) =>
+        ),
+      );
+    let attempt = 0;
+    const autoArchive = (threadId: ThreadId, settledBefore: number) =>
       orchestrator.dispatch({
-        type: "thread.delete",
-        commandId: CommandId.make(`auto-delete:${threadId}`),
+        type: "thread.archive",
+        commandId: CommandId.make(`auto-archive:${threadId}:${++attempt}`),
         threadId,
         settledBefore: DateTime.makeUnsafe(settledBefore),
       });
+    const autoDelete = (threadId: ThreadId, archivedBefore: number) =>
+      orchestrator.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.make(`auto-delete:${threadId}:${++attempt}`),
+        threadId,
+        archivedBefore: DateTime.makeUnsafe(archivedBefore),
+      });
+    const archivedAt = (threadId: ThreadId) =>
+      thread(threadId).pipe(Effect.map((thread) => thread.archivedAt));
     const deletedAt = (threadId: ThreadId) =>
-      orchestrator.getThreadProjection(threadId).pipe(Effect.map(({ thread }) => thread.deletedAt));
+      thread(threadId).pipe(Effect.map((thread) => thread.deletedAt));
 
     const a = yield* settled("a");
+    yield* autoDelete(a, yield* cutoff(a));
+    assert.isNull(yield* deletedAt(a), "an unarchived thread is not deleted");
+    yield* autoArchive(a, (yield* cutoff(a)) - 1);
+    assert.isNull(yield* archivedAt(a), "activity after the cutoff keeps it");
+    yield* autoArchive(a, yield* cutoff(a));
+    assert.isNotNull(yield* archivedAt(a));
+    yield* autoDelete(a, (yield* cutoff(a)) - 1);
+    assert.isNull(yield* deletedAt(a), "archived after the cutoff");
     yield* autoDelete(a, yield* cutoff(a));
     assert.isNotNull(yield* deletedAt(a));
 
     const b = yield* settled("b");
     yield* orchestrator.dispatch({
       type: "thread.unsettle",
-      commandId: CommandId.make("auto-delete-b-unsettle"),
+      commandId: CommandId.make("auto-cleanup-b-unsettle"),
       threadId: b,
       reason: "user",
     });
-    yield* autoDelete(b, yield* cutoff(b));
-    assert.isNull(yield* deletedAt(b));
+    yield* autoArchive(b, yield* cutoff(b));
+    assert.isNull(yield* archivedAt(b));
 
     const c = yield* settled("c");
     yield* orchestrator.dispatch({
       type: "thread.archive",
-      commandId: CommandId.make("auto-delete-c-archive"),
+      commandId: CommandId.make("auto-cleanup-c-archive"),
       threadId: c,
     });
-    yield* autoDelete(c, yield* cutoff(c));
-    assert.isNull(yield* deletedAt(c));
-
-    const d = yield* settled("d");
-    yield* autoDelete(d, (yield* cutoff(d)) - 1);
-    assert.isNull(yield* deletedAt(d));
-
-    const e = yield* settled("e");
-    const beforeOpen = yield* cutoff(e);
+    const refusedArchive = yield* autoArchive(c, yield* cutoff(c));
+    assert.strictEqual(refusedArchive.storedEvents.length, 0, "already archived is not an error");
+    const archivedCutoff = yield* cutoff(c);
     yield* TestClock.adjust("1 hour");
-    const visitedAt = yield* orchestrator
-      .getThreadProjection(e)
-      .pipe(Effect.map(({ thread }) => DateTime.formatIso(thread.updatedAt)));
+    const visitedAt = yield* thread(c).pipe(
+      Effect.map((thread) => DateTime.formatIso(thread.updatedAt)),
+    );
     yield* orchestrator.dispatch({
       type: "thread.visit",
-      commandId: CommandId.make("auto-delete-e-visit"),
-      threadId: e,
+      commandId: CommandId.make("auto-cleanup-c-visit"),
+      threadId: c,
       visitedAt,
       opened: true,
     });
-    const refused = yield* autoDelete(e, beforeOpen);
-    assert.strictEqual(refused.storedEvents.length, 0);
-    assert.isNull(yield* deletedAt(e));
+    const refusedDelete = yield* autoDelete(c, archivedCutoff);
+    assert.strictEqual(refusedDelete.storedEvents.length, 0);
+    assert.isNull(yield* deletedAt(c), "opened since it was archived");
 
-    const f = yield* settled("f");
+    const d = yield* settled("d");
     yield* orchestrator.dispatch({
       type: "thread.snooze",
-      commandId: CommandId.make("auto-delete-f-snooze"),
-      threadId: f,
+      commandId: CommandId.make("auto-cleanup-d-snooze"),
+      threadId: d,
       snoozedUntil: DateTime.formatIso(DateTime.add(yield* DateTime.now, { days: 7 })),
     });
-    yield* autoDelete(f, yield* cutoff(f));
-    assert.isNull(yield* deletedAt(f));
+    yield* autoArchive(d, yield* cutoff(d));
+    assert.isNull(yield* archivedAt(d));
   }).pipe(Effect.provide(forkCases[0]!.layer)),
 );
 
