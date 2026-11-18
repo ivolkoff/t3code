@@ -60,6 +60,7 @@ function commandId(input: {
 }
 
 function metadataCommand(input: {
+  readonly scope: McpInvocationScope;
   readonly commandId: CommandId;
   readonly threadId: ThreadId;
   readonly update: ThreadMetadataMcpUpdateInput;
@@ -79,6 +80,19 @@ function metadataCommand(input: {
         threadId: input.threadId,
         regenerateTitle: true,
       };
+    case "set_working_on": {
+      const workingOn = input.update.workingOn!;
+      return {
+        type: "thread.metadata.update",
+        commandId: input.commandId,
+        threadId: input.threadId,
+        workingOn,
+        // Only the thread's own agent finishing its task offers to settle it.
+        ...(workingOn === null && input.scope.thread?.threadId === input.threadId
+          ? { workingOnDone: true }
+          : {}),
+      };
+    }
   }
 }
 
@@ -88,7 +102,7 @@ function resultFromThread(input: {
   readonly sequence: number;
   readonly thread: Pick<
     OrchestrationV2AppThread,
-    "id" | "title" | "titleRegeneration" | "linkedPullRequest" | "updatedAt"
+    "id" | "title" | "workingOn" | "titleRegeneration" | "linkedPullRequest" | "updatedAt"
   >;
 }): ThreadMetadataMcpUpdateResult {
   return {
@@ -97,6 +111,7 @@ function resultFromThread(input: {
     commandId: input.commandId,
     sequence: input.sequence,
     title: input.thread.title,
+    workingOn: input.thread.workingOn ?? null,
     titleRegeneration:
       input.thread.titleRegeneration === undefined || input.thread.titleRegeneration === null
         ? null
@@ -160,6 +175,7 @@ const make = Effect.gen(function* () {
     const dispatched = yield* threadManagement
       .dispatch(
         metadataCommand({
+          scope,
           commandId: updateCommandId,
           threadId,
           update: input,

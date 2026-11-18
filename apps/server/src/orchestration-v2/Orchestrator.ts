@@ -4901,6 +4901,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : command.regenerateTitle === false || command.title !== undefined
                 ? { titleRegeneration: null }
                 : {}),
+            ...(command.workingOn === undefined ? {} : { workingOn: command.workingOn }),
+            ...(command.workingOnDone === true &&
+            command.workingOn === null &&
+            thread.workingOn != null
+              ? { workingOnDoneAt: now }
+              : command.workingOnDone === false || typeof command.workingOn === "string"
+                ? { workingOnDoneAt: null }
+                : {}),
             updatedAt: now,
           };
         }
