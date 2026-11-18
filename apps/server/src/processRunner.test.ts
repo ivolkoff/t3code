@@ -257,6 +257,32 @@ describe("runProcess", () => {
     }),
   );
 
+  it.effect("keeps the exit code of a child that closed stdin unread, when asked", () =>
+    Effect.gen(function* () {
+      const spawner = makeSpawner(() =>
+        Effect.succeed(
+          makeHandle({
+            code: 4,
+            stdin: Sink.fail(
+              PlatformError.systemError({
+                _tag: "Unknown",
+                module: "ChildProcess",
+                method: "fromWritable(stdin)",
+                cause: { code: "EPIPE" },
+              }),
+            ),
+          }),
+        ),
+      );
+      const input = { command: "fake", args: ["exit"], stdin: "payload" };
+
+      const error = yield* runWith(spawner)(input).pipe(Effect.flip);
+      expect(error).toBeInstanceOf(ProcessRunner.ProcessStdinError);
+      const result = yield* runWith(spawner)({ ...input, ignoreUnreadStdin: true });
+      expect(result.code).toBe(4);
+    }),
+  );
+
   it.effect("writes stdin before waiting for exit", () =>
     Effect.gen(function* () {
       const stdinWritten = yield* Deferred.make<void>();

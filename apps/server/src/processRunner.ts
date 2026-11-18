@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -33,6 +34,8 @@ export interface ProcessRunInput {
   readonly truncatedMarker?: string | undefined;
   /** Timed-out results discard partial stdout/stderr. */
   readonly timeoutBehavior?: "error" | "timedOutResult" | undefined;
+  /** A child may exit without reading stdin; its exit code still decides the result. */
+  readonly ignoreUnreadStdin?: boolean | undefined;
 }
 
 export interface ProcessRunOutput {
@@ -263,6 +266,11 @@ function finalizeRunProcess<R>(
   );
 }
 
+const isBrokenPipe = (error: PlatformError.PlatformError) => {
+  const cause = "cause" in error.reason ? error.reason.cause : undefined;
+  return Predicate.hasProperty(cause, "code") && cause.code === "EPIPE";
+};
+
 const commandName = (command: string) => command.replace(/^.*[\\/]/, "");
 
 const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
@@ -324,6 +332,10 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
     stdin === undefined
       ? Effect.void
       : Stream.run(Stream.encodeText(Stream.make(stdin)), child.stdin).pipe(
+          Effect.catchIf(
+            (cause) => input.ignoreUnreadStdin === true && isBrokenPipe(cause),
+            () => Effect.void,
+          ),
           Effect.mapError(
             (cause) =>
               new ProcessStdinError({

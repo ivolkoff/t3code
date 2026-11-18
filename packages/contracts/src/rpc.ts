@@ -6,6 +6,7 @@ import {
   OrchestrationV2SearchThreadsResult,
 } from "./orchestrationV2.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
+import { EventHookRun, EventHookRunsResult, EventHookTestInput } from "./eventHooks.ts";
 import {
   McpAppCallToolInput,
   McpAppCallToolResult,
@@ -545,6 +546,8 @@ export const WS_METHODS = {
   serverGetResourceTelemetryHistory: "server.getResourceTelemetryHistory",
   serverRetryResourceTelemetry: "server.retryResourceTelemetry",
   serverCheckOtlpEndpoint: "server.checkOtlpEndpoint",
+  serverTestEventHook: "server.testEventHook",
+  serverGetEventHookRuns: "server.getEventHookRuns",
   serverListTextGeneratorModels: "server.listTextGeneratorModels",
   serverPrepareTriage: "server.prepareTriage",
   serverSignalProcess: "server.signalProcess",
@@ -1007,6 +1010,18 @@ const WsServerRetryResourceTelemetryRpc = Rpc.make(WS_METHODS.serverRetryResourc
 const WsServerCheckOtlpEndpointRpc = Rpc.make(WS_METHODS.serverCheckOtlpEndpoint, {
   payload: OtlpEndpointCheckInput,
   success: OtlpEndpointCheckResult,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsServerTestEventHookRpc = Rpc.make(WS_METHODS.serverTestEventHook, {
+  payload: EventHookTestInput,
+  success: EventHookRun,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsServerGetEventHookRunsRpc = Rpc.make(WS_METHODS.serverGetEventHookRuns, {
+  payload: Schema.Struct({}),
+  success: EventHookRunsResult,
   error: EnvironmentAuthorizationError,
 });
 
@@ -2167,6 +2182,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
   WsServerCheckOtlpEndpointRpc,
+  WsServerTestEventHookRpc,
+  WsServerGetEventHookRunsRpc,
   WsServerListTextGeneratorModelsRpc,
   WsServerPrepareTriageRpc,
   WsServerGetUsageSummaryRpc,
