@@ -216,3 +216,10 @@ keyboard repeat; if repeat is disabled, use two presses or the application menu.
 Change **Settings → General → Confirmations → Quit shortcut** to **Direct** for a
 single press or **Double press** for two presses only. Choosing **Quit** from the
 application menu always quits immediately.
+
+## Global show/hide shortcut (desktop)
+
+On macOS and Windows, set **Settings → General → Confirmations → Show/hide shortcut** to
+bring T3 Code forward from any app. Pressing it while T3 Code is in front hides the app
+on macOS and minimizes the window on Windows. The shortcut needs a modifier and a key,
+and it is off until you set one; **Clear** turns it off again.

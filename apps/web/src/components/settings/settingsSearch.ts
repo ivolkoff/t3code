@@ -860,6 +860,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "window-toggle-shortcut",
+    title: "Show/hide shortcut",
+    to: "/settings/general",
+    searchTerms: ["global hotkey summon toggle window hide show desktop app"],
+    desktopOnly: true,
+  },
+  {
     id: "text-generation-model",
     title: "Text generation model",
     to: "/settings/threads",
