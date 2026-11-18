@@ -67,6 +67,7 @@ vi.mock(import("./previewBridge"), async (original) => ({
     hardReload: vi.fn(async () => undefined),
     openDevTools: vi.fn(async () => undefined),
     setColorScheme: vi.fn(async () => undefined),
+    setDevice: vi.fn(async () => undefined),
     zoomIn: vi.fn(async () => undefined),
     zoomOut: vi.fn(async () => undefined),
     resetZoom: vi.fn(async () => undefined),

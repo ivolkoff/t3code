@@ -1029,6 +1029,19 @@ export const DesktopPreviewSetColorSchemeInputSchema = Schema.Struct({
   colorScheme: DesktopPreviewColorSchemeSchema,
 });
 
+/** A viewport preset whose device the tab emulates; its size is the emulated screen. */
+export const DesktopPreviewDeviceSchema = Schema.Struct({
+  presetId: Schema.String,
+  width: Schema.Int,
+  height: Schema.Int,
+});
+export type DesktopPreviewDevice = typeof DesktopPreviewDeviceSchema.Type;
+
+export const DesktopPreviewSetDeviceInputSchema = Schema.Struct({
+  tabId: DesktopPreviewTabIdSchema,
+  device: Schema.NullOr(DesktopPreviewDeviceSchema),
+});
+
 export const DesktopPreviewSetZoomFactorInputSchema = Schema.Struct({
   tabId: DesktopPreviewTabIdSchema,
   zoomFactor: Schema.Number.check(Schema.isGreaterThan(0)),
@@ -1316,6 +1329,8 @@ export interface DesktopPreviewBridge {
   setZoomFactor: (tabId: string, zoomFactor: number) => Promise<void>;
   hardReload: (tabId: string) => Promise<void>;
   setColorScheme: (tabId: string, colorScheme: DesktopPreviewColorScheme) => Promise<void>;
+  /** Null restores the desktop identity; a change reloads the page. */
+  setDevice: (tabId: string, device: DesktopPreviewDevice | null) => Promise<void>;
   setAudioMuted: (tabId: string, audioMuted: boolean) => Promise<void>;
   findInPage: (
     tabId: string,

@@ -1,4 +1,5 @@
 import type { ClientSettings } from "@t3tools/contracts";
+import { PREVIEW_VIEWPORT_PRESETS } from "@t3tools/shared/previewViewport";
 
 const CHROME_PLATFORM_TOKENS = {
   macos: "Macintosh; Intel Mac OS X 10_15_7",
@@ -47,6 +48,19 @@ const CHROME_PLATFORM_NAMES = { macos: "macOS", windows: "Windows", linux: "Linu
 const FOREIGN_PLATFORM_VERSIONS = { macos: "15.0.0", windows: "10.0.0", linux: "" } as const;
 // Chromium's GREASE brand for the current engine, as Electron already reports it.
 const GREASE_BRAND = { brand: "Not?A_Brand", version: "24" } as const;
+
+const chromeBrands = (major: string, fullVersion: string) => ({
+  brands: [
+    GREASE_BRAND,
+    { brand: "Chromium", version: major },
+    { brand: "Google Chrome", version: major },
+  ],
+  fullVersionList: [
+    { brand: GREASE_BRAND.brand, version: `${GREASE_BRAND.version}.0.0.0` },
+    { brand: "Chromium", version: fullVersion },
+    { brand: "Google Chrome", version: fullVersion },
+  ],
+});
 
 const presetChromePlatform = (
   preset: PreviewUserAgentSettings["browserUserAgentPreset"],
@@ -108,16 +122,7 @@ export const resolvePreviewUserAgentMetadata = (
   const native = platform === hostChromePlatform(engine.platform);
   const arm = native && engine.arch.startsWith("arm");
   return {
-    brands: [
-      GREASE_BRAND,
-      { brand: "Chromium", version: major },
-      { brand: "Google Chrome", version: major },
-    ],
-    fullVersionList: [
-      { brand: GREASE_BRAND.brand, version: `${GREASE_BRAND.version}.0.0.0` },
-      { brand: "Chromium", version: engine.chromeVersion },
-      { brand: "Google Chrome", version: engine.chromeVersion },
-    ],
+    ...chromeBrands(major, engine.chromeVersion),
     platform: CHROME_PLATFORM_NAMES[platform],
     platformVersion: native ? engine.systemVersion : FOREIGN_PLATFORM_VERSIONS[platform],
     architecture: arm ? "arm" : "x86",
@@ -134,3 +139,38 @@ export const clientHintHeaders = (metadata: PreviewUserAgentMetadata): Record<st
   "sec-ch-ua-mobile": metadata.mobile ? "?1" : "?0",
   "sec-ch-ua-platform": `"${metadata.platform}"`,
 });
+
+export interface PreviewDeviceEmulation {
+  readonly presetId: string;
+  readonly userAgent: string;
+  readonly metadata: PreviewUserAgentMetadata;
+  readonly deviceScaleFactor: number;
+  readonly mobile: boolean;
+}
+
+/** Null keeps the desktop identity: no preset, a legacy preset, or an engine without a version. */
+export const resolvePreviewDeviceEmulation = (
+  presetId: string | null,
+  engine: PreviewEngine,
+): PreviewDeviceEmulation | null => {
+  const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === presetId);
+  const major = engine.chromeVersion.split(".")[0] ?? "";
+  if (!preset || major === "") return null;
+  const { device } = preset;
+  return {
+    presetId: preset.id,
+    userAgent: device.userAgent.replaceAll("{chrome}", major),
+    metadata: {
+      ...chromeBrands(major, engine.chromeVersion),
+      platform: device.platform,
+      platformVersion: device.platformVersion,
+      architecture: device.mobile ? "" : "x86",
+      bitness: device.mobile ? "" : "64",
+      model: device.model,
+      mobile: device.mobile,
+      wow64: false,
+    },
+    deviceScaleFactor: device.deviceScaleFactor,
+    mobile: device.mobile,
+  };
+};
