@@ -1988,6 +1988,8 @@ export function threadShellFromProjection(
     pinnedAt: projection.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: projection.thread.autoSettleDisabledAt ?? null,
+    workingOn: projection.thread.workingOn ?? null,
+    workingOnDoneAt: projection.thread.workingOnDoneAt ?? null,
     pinOrderKey: projection.thread.pinOrderKey ?? null,
     ...(projection.thread.tags?.length ? { tags: projection.thread.tags } : {}),
     lastVisitedAt: projection.thread.lastVisitedAt,
@@ -2286,6 +2288,8 @@ function shellFromState(input: {
     pinnedAt: input.state.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: input.state.thread.autoSettleDisabledAt ?? null,
+    workingOn: input.state.thread.workingOn ?? null,
+    workingOnDoneAt: input.state.thread.workingOnDoneAt ?? null,
     pinOrderKey: input.state.thread.pinOrderKey ?? null,
     ...(input.state.thread.tags?.length ? { tags: input.state.thread.tags } : {}),
     lastVisitedAt: input.state.thread.lastVisitedAt,
