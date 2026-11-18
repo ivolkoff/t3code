@@ -2710,6 +2710,8 @@
   "d1259290b8c63577": "Rename thread",
   "6dd1f458bcd6a2ea": "Regenerating…",
   "de30fdae5b3fea98": "Regenerate title",
+  "cafac459938c60a3": "Set working-on line…",
+  "d6d344e5549cecff": "Edit working-on line…",
   "dffd2e20f7ff5aa1": "Mark unread",
   "3364346f40934e88": "Show all projects",
   "666f3ac177c116b6": "Filter by {project}",
@@ -3269,12 +3271,24 @@
   ],
   "3dbc42464b2bfb20": "Fast and Ultrafast are unavailable with this ChatGPT connection. Use an existing Codex CLI login for speed options your account supports.",
   "5c0eb4217bb673bd": "Using ChatGPT plan",
+  "c939fede859900af": "Failed to update the working-on line",
   "3e545d70d0c3535c": "Thread breadcrumb",
   "890c34762a621a66": "Open parent thread: {title}",
   "7514746d2bd43a1c": "Thread title",
   "ab42a6d2ab6073d9": "Thread actions for {title}",
+  "b07114447756f116": "Working on",
+  "be629766c57e5bf1": "What is this thread working on?",
+  "935b57bfb14de080": "Working on: {workingOn}",
   "cd8fd5a47060164b": [
     "New thread in ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "1dbf3c8f8996e12b": [
+    "Working on: ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -4810,6 +4824,7 @@
   "aa4fc5b9acda0f2e": "Checkout switched, but the thread could not be updated",
   "eb2cc2e7c234d4fd": "Failed to stop background work.",
   "a0aa3533b5a60cc4": "This thread is no longer available",
+  "83c3eb702145c456": "Failed to dismiss",
   "9abc8144c24eb42b": "Snoozed, {remaining} left",
   "7df8fb644450d82e": "Snoozed",
   "e4fb59de91f77e5e": "Waking...",
@@ -4818,6 +4833,8 @@
   "46057a7aacae5167": "Un-settling...",
   "55c0728ebb0b05b1": "Un-settle",
   "fd4e45408394aac4": "Woke from snooze",
+  "916e170d364571f9": "Task looks done",
+  "13e6f2309e418404": "Settle",
   "e7f9e31365849b9f": "This provider does not support reverting conversation history. Start a new thread instead.",
   "31db4cf2474ef2a6": "Reconnect {environment} before reverting checkpoints.",
   "f7d2db726b3a9316": "Interrupt the current turn before reverting checkpoints.",

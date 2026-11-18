@@ -22,6 +22,7 @@ export type ThreadActionMenuId =
   | "unsnooze"
   | "rename"
   | "regenerate-title"
+  | "edit-working-on"
   | "mark-unread"
   | "share-guest"
   | "copy"
@@ -123,6 +124,8 @@ export interface ThreadActionMenuState {
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+  /** `undefined` hides the item: the caller cannot edit the line, or its server lacks it. */
+  readonly workingOn?: string | null;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -219,6 +222,18 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    ...(state.workingOn === undefined
+      ? []
+      : [
+          {
+            id: "edit-working-on" as const,
+            label:
+              state.workingOn === null
+                ? resolve(msg("Set working-on line…"))
+                : resolve(msg("Edit working-on line…")),
+            icon: "pencil",
+          },
+        ]),
     { id: "mark-unread", label: resolve(msg("Mark unread")), icon: "mail-open" },
     ...(state.canShareWithGuest
       ? [{ id: "share-guest" as const, label: resolve(msg("Share with guest")), icon: "user-plus" }]

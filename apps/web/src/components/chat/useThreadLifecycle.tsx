@@ -38,6 +38,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-execution";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
 import { settleAndAdvance } from "../../settleAndAdvance";
+import { shouldOfferSettle } from "./workingOnOffer.logic";
 import type { ChatShortcutCommands } from "./useChatShortcuts";
 import { resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -640,6 +641,36 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     snoozedUntil && Date.parse(snoozedUntil) > Date.parse(snoozeNow)
       ? snoozeWakeLabel(snoozedUntil, { now: snoozeNow }, messages)
       : null;
+  const toastThreadActionFailure =
+    (title: string) => (result: AtomCommandResult<unknown, unknown>) => {
+      if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title,
+          description: thrownErrorMessage(error, m) ?? m(msg("An error occurred.")),
+        }),
+      );
+    };
+  const settleActiveThread = () => {
+    if (!activeThreadRef) return;
+    if (settleAndAdvance(activeThreadRef)) return;
+    void settleThread(activeThreadRef).then(
+      toastThreadActionFailure(m(msg("Failed to settle thread"))),
+    );
+  };
+  const continueActiveThread = () => {
+    if (!activeThreadRef) return;
+    void updateThreadMetadata({
+      environmentId: activeThreadRef.environmentId,
+      input: { threadId: activeThreadRef.threadId, workingOnDone: false },
+    }).then(toastThreadActionFailure(m(msg("Failed to dismiss"))));
+  };
+  const offerSettle =
+    activeThreadShell !== null &&
+    serverConfigLoaded &&
+    shouldOfferSettle(activeThreadShell, { snoozed: activeThreadSnoozed });
   const threadStatusLine = activeThreadSnoozed ? (
     limitRecoveryHoldsSnooze ? null : (
       <ThreadStatusLine
@@ -675,19 +706,17 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       actionLabel={gt("Dismiss")}
       onAction={acknowledgeActiveThreadWokeStable}
     />
+  ) : offerSettle ? (
+    <ThreadStatusLine
+      icon={<CheckCircle2Icon />}
+      label={gt("Task looks done")}
+      actionLabel={gt("Settle")}
+      actionDisabled={!canOperateThread}
+      onAction={settleActiveThread}
+      secondaryActionLabel={gt("Continue")}
+      onSecondaryAction={continueActiveThread}
+    />
   ) : null;
-  const toastThreadActionFailure =
-    (title: string) => (result: AtomCommandResult<unknown, unknown>) => {
-      if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
-      const error = squashAtomCommandFailure(result);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title,
-          description: thrownErrorMessage(error, m) ?? m(msg("An error occurred.")),
-        }),
-      );
-    };
   const shortcuts = {
     "thread.settle": () => {
       if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
@@ -696,10 +725,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
         void handleUnsettleActiveThread();
         return;
       }
-      if (settleAndAdvance(activeThreadRef)) return;
-      void settleThread(activeThreadRef).then(
-        toastThreadActionFailure(m(msg("Failed to settle thread"))),
-      );
+      settleActiveThread();
     },
     "thread.pin": ({ event }) => {
       // An open project list pins its highlighted project with this key instead.
