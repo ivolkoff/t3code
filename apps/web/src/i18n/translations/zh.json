@@ -2674,6 +2674,7 @@
   "2d1f6668f713dca9": "添加操作",
   "da1b3bc9635dcdc8": "操作是项目内的命令，可从顶栏或通过快捷键运行。",
   "4614a422f1430cd7": "名称",
+  "9c6425bfbbebf750": "Other…",
   "d3502e7db0cdb998": "快捷键",
   "86f71ac04d41f95e": [
     "按下快捷键。使用 ",
@@ -8899,6 +8900,8 @@
   "094ddd39c2536c8d": "字母图标",
   "b0cbc9acb4698e63": "颜色",
   "91547f3c1c36c209": "未找到图标。",
+  "ee6db394257ae3a7": "Choose action icon",
+  "0ef83cff83f8a909": "Pick any Lucide icon for this action.",
   "236f83dec2ef4eba": "字母",
   "cd2acbace965052d": "一个或两个字母或数字。",
   "fc10b8da35c8560e": "或粘贴任意表情",

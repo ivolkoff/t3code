@@ -2670,6 +2670,7 @@
   "2d1f6668f713dca9": "Adicionar ação",
   "da1b3bc9635dcdc8": "Ações são comandos do projeto que você pode executar pela barra superior ou por atalhos de teclado.",
   "4614a422f1430cd7": "Nome",
+  "9c6425bfbbebf750": "Other…",
   "d3502e7db0cdb998": "Atalho de teclado",
   "86f71ac04d41f95e": [
     "Pressione um atalho. Use ",
@@ -8882,6 +8883,8 @@
   "094ddd39c2536c8d": "Monograma",
   "b0cbc9acb4698e63": "Cor",
   "91547f3c1c36c209": "Nenhum ícone encontrado.",
+  "ee6db394257ae3a7": "Choose action icon",
+  "0ef83cff83f8a909": "Pick any Lucide icon for this action.",
   "236f83dec2ef4eba": "Letras",
   "cd2acbace965052d": "Uma ou duas letras ou números.",
   "fc10b8da35c8560e": "Ou cole qualquer emoji",

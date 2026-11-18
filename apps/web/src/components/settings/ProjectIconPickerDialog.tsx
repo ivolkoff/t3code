@@ -41,6 +41,90 @@ function iconLabel(name: string): string {
     .join(" ");
 }
 
+export function LucideIconSearch({
+  selected,
+  iconClassName,
+  onSelect,
+}: {
+  readonly selected: string | undefined;
+  readonly iconClassName?: string;
+  readonly onSelect: (name: string) => void;
+}) {
+  const gt = useGT();
+  const [query, setQuery] = useState("");
+  const icons = filterProjectIconNames(query);
+  return (
+    <>
+      <Input
+        type="search"
+        value={query}
+        aria-label={gt("Search Lucide icons")}
+        placeholder={gt("Search all Lucide icons")}
+        onChange={(event) => setQuery(event.currentTarget.value)}
+      />
+      <ScrollArea scrollFade className="max-h-64">
+        <div className="grid grid-cols-8 gap-1 p-0.5 sm:grid-cols-10">
+          {icons.map((name) => (
+            <button
+              key={name}
+              type="button"
+              aria-label={iconLabel(name)}
+              aria-pressed={selected === name}
+              className={cn(
+                "flex aspect-square items-center justify-center rounded-md border border-transparent outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                selected === name && "border-border bg-accent",
+                iconClassName,
+              )}
+              onClick={() => onSelect(name)}
+            >
+              <PickerIcon name={name} />
+            </button>
+          ))}
+        </div>
+      </ScrollArea>
+      {icons.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          <T>No icons found.</T>
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+export function ScriptIconPickerDialog({
+  selected,
+  onOpenChange,
+  onSelect,
+}: {
+  readonly selected: string | undefined;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onSelect: (name: string) => void;
+}) {
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogPopup className="w-full sm:w-[32rem]">
+        <DialogHeader>
+          <DialogTitle>
+            <T>Choose action icon</T>
+          </DialogTitle>
+          <DialogDescription>
+            <T>Pick any Lucide icon for this action.</T>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogPanel className="flex min-h-0 flex-col">
+          <LucideIconSearch
+            selected={selected}
+            onSelect={(name) => {
+              onSelect(name);
+              onOpenChange(false);
+            }}
+          />
+        </DialogPanel>
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
 export function ProjectIconPickerDialog({
   current,
   projectName,
@@ -94,10 +178,8 @@ function ProjectIconPickerBody({
     current?.kind === "monogram" ? current.text : automatic.monogram,
   );
   const [emoji, setEmoji] = useState(current?.kind === "emoji" ? current.emoji : "💻");
-  const [query, setQuery] = useState("");
   const [customEmoji, setCustomEmoji] = useState("");
 
-  const icons = filterProjectIconNames(query);
   const selectedColorClassName = projectIconColorClassName(color);
   const monogram = letters.normalize("NFKC").trim().toUpperCase();
   const validMonogram = isValidProjectMonogram(monogram);
@@ -170,40 +252,11 @@ function ProjectIconPickerBody({
         ) : null}
 
         {mode === "lucide" ? (
-          <>
-            <Input
-              type="search"
-              value={query}
-              aria-label={gt("Search Lucide icons")}
-              placeholder={gt("Search all Lucide icons")}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-            />
-            <ScrollArea scrollFade className="max-h-64">
-              <div className="grid grid-cols-8 gap-1 p-0.5 sm:grid-cols-10">
-                {icons.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    aria-label={iconLabel(name)}
-                    aria-pressed={iconName === name}
-                    className={cn(
-                      "flex aspect-square items-center justify-center rounded-md border border-transparent outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                      iconName === name && "border-border bg-accent",
-                      selectedColorClassName,
-                    )}
-                    onClick={() => setIconName(name)}
-                  >
-                    <PickerIcon name={name} />
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
-            {icons.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                <T>No icons found.</T>
-              </p>
-            ) : null}
-          </>
+          <LucideIconSearch
+            selected={iconName}
+            iconClassName={selectedColorClassName}
+            onSelect={setIconName}
+          />
         ) : mode === "monogram" ? (
           <div className="flex items-center gap-4 py-2">
             <ProjectMonogram

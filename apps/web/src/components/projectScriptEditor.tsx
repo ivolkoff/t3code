@@ -14,14 +14,25 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   BugIcon,
+  EllipsisIcon,
   FlaskConicalIcon,
   HammerIcon,
   ListChecksIcon,
+  type LucideIcon,
   PlayIcon,
   WrenchIcon,
 } from "lucide-react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
-import React, { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import React, {
+  createElement,
+  type FormEvent,
+  type KeyboardEvent,
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   keybindingValueForCommand,
@@ -65,25 +76,59 @@ const SCRIPT_ICONS: Array<{ id: ProjectScriptIcon; label: string }> = [
   { id: "debug", label: msg("Debug") },
 ];
 
+const SCRIPT_ICON_COMPONENTS: Record<ProjectScriptIcon, LucideIcon> = {
+  play: PlayIcon,
+  test: FlaskConicalIcon,
+  lint: ListChecksIcon,
+  configure: WrenchIcon,
+  build: HammerIcon,
+  debug: BugIcon,
+};
+
+// All lucide icons load as one chunk, only once an action uses a named icon.
+const NamedScriptIcon = lazy(() =>
+  import("~/lib/lucideIconByName").then(({ lucideIconByName }) => ({
+    default: function NamedScriptIcon(props: {
+      name: string;
+      fallback: LucideIcon;
+      className: string;
+    }) {
+      return createElement(lucideIconByName(props.name) ?? props.fallback, {
+        className: props.className,
+      });
+    },
+  })),
+);
+
+const ScriptIconPickerDialog = lazy(() =>
+  import("./settings/ProjectIconPickerDialog").then((module) => ({
+    default: module.ScriptIconPickerDialog,
+  })),
+);
+
 export function ScriptIcon({
   icon,
+  iconName,
   className = "size-3.5",
 }: {
   icon: ProjectScriptIcon;
+  iconName?: string | undefined;
   className?: string;
 }) {
-  if (icon === "test") return <FlaskConicalIcon className={className} />;
-  if (icon === "lint") return <ListChecksIcon className={className} />;
-  if (icon === "configure") return <WrenchIcon className={className} />;
-  if (icon === "build") return <HammerIcon className={className} />;
-  if (icon === "debug") return <BugIcon className={className} />;
-  return <PlayIcon className={className} />;
+  const Fallback = SCRIPT_ICON_COMPONENTS[icon];
+  if (!iconName) return <Fallback className={className} />;
+  return (
+    <Suspense fallback={<Fallback className={className} />}>
+      <NamedScriptIcon name={iconName} fallback={Fallback} className={className} />
+    </Suspense>
+  );
 }
 
 export interface NewProjectScriptInput {
   name: string;
   command: string;
   icon: ProjectScriptIcon;
+  iconName?: string | undefined;
   runOnWorktreeCreate: boolean;
   waitForSetup: boolean;
   runOnSettle: boolean;
@@ -125,6 +170,7 @@ export function editorRequestForScript(
       name: script.name,
       command: script.command,
       icon: script.icon,
+      iconName: script.iconName,
       runOnWorktreeCreate: script.runOnWorktreeCreate,
       waitForSetup: script.runOnWorktreeCreate && script.async === false,
       runOnSettle: script.runOnSettle ?? false,
@@ -285,7 +331,9 @@ function ProjectScriptEditorForm({
   const [name, setName] = useState(request.initial.name);
   const [command, setCommand] = useState(request.initial.command);
   const [icon, setIcon] = useState<ProjectScriptIcon>(request.initial.icon);
+  const [iconName, setIconName] = useState(request.initial.iconName);
   const [iconPickerOpen, setIconPickerOpen] = useComposerMenuState(!canEditActions);
+  const [lucidePickerOpen, setLucidePickerOpen] = useComposerMenuState(!canEditActions);
   const [runOnWorktreeCreate, setRunOnWorktreeCreate] = useState(
     request.initial.runOnWorktreeCreate,
   );
@@ -313,6 +361,7 @@ function ProjectScriptEditorForm({
     pendingSubmissionRef.current = null;
     setIsSaving(false);
     setIconPickerOpen(false);
+    setLucidePickerOpen(false);
     onClose();
   };
 
@@ -373,6 +422,7 @@ function ProjectScriptEditorForm({
         name: trimmedName,
         command: trimmedCommand,
         icon,
+        iconName,
         runOnWorktreeCreate,
         waitForSetup: runOnWorktreeCreate && waitForSetup,
         runOnSettle,
@@ -442,12 +492,12 @@ function ProjectScriptEditorForm({
                       />
                     }
                   >
-                    <ScriptIcon icon={icon} className="size-4.5" />
+                    <ScriptIcon icon={icon} iconName={iconName} className="size-4.5" />
                   </PopoverTrigger>
                   <PopoverPopup align="start">
                     <div className="grid grid-cols-3 gap-2">
                       {SCRIPT_ICONS.map((entry) => {
-                        const isSelected = entry.id === icon;
+                        const isSelected = !iconName && entry.id === icon;
                         return (
                           <button
                             key={entry.id}
@@ -459,6 +509,7 @@ function ProjectScriptEditorForm({
                             }`}
                             onClick={() => {
                               setIcon(entry.id);
+                              setIconName(undefined);
                               setIconPickerOpen(false);
                             }}
                           >
@@ -467,9 +518,39 @@ function ProjectScriptEditorForm({
                           </button>
                         );
                       })}
+                      <button
+                        type="button"
+                        className={`col-span-3 flex items-center justify-center gap-2 rounded-md border px-2 py-2 text-xs dark:border-transparent ${
+                          iconName
+                            ? "border-primary/70 bg-primary/10 ring-inset dark:ring-1 dark:ring-primary/30"
+                            : "border-border/70 hover:bg-accent/60 dark:bg-white/[0.035]"
+                        }`}
+                        onClick={() => {
+                          setIconPickerOpen(false);
+                          setLucidePickerOpen(true);
+                        }}
+                      >
+                        {iconName ? (
+                          <ScriptIcon icon={icon} iconName={iconName} className="size-4" />
+                        ) : (
+                          <EllipsisIcon className="size-4" />
+                        )}
+                        <span>
+                          <T>Other…</T>
+                        </span>
+                      </button>
                     </div>
                   </PopoverPopup>
                 </Popover>
+                {lucidePickerOpen && canEditActions ? (
+                  <Suspense fallback={null}>
+                    <ScriptIconPickerDialog
+                      selected={iconName}
+                      onOpenChange={setLucidePickerOpen}
+                      onSelect={setIconName}
+                    />
+                  </Suspense>
+                ) : null}
                 <Input
                   id="script-name"
                   autoFocus

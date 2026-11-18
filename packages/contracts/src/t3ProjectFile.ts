@@ -34,6 +34,12 @@ export const T3ProjectFileScript = Schema.Struct({
       description: 'Icon shown next to the script in the scripts menu. Defaults to "play".',
     }),
   ),
+  iconName: Schema.optionalKey(
+    Schema.String.annotate({
+      description:
+        'Any Lucide icon name in kebab-case (e.g. "rocket"), shown instead of `icon`. Unknown or malformed names fall back to `icon`.',
+    }),
+  ),
   runOnWorktreeCreate: Schema.optionalKey(
     Schema.Boolean.annotate({
       description:

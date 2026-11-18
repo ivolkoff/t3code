@@ -2670,6 +2670,7 @@
   "2d1f6668f713dca9": "Lägg till åtgärd",
   "da1b3bc9635dcdc8": "Åtgärder är projektspecifika kommandon som du kan köra från det övre fältet eller med kortkommandon.",
   "4614a422f1430cd7": "Namn",
+  "9c6425bfbbebf750": "Other…",
   "d3502e7db0cdb998": "Kortkommando",
   "86f71ac04d41f95e": [
     "Tryck på ett kortkommando. Använd ",
@@ -8889,6 +8890,8 @@
   "094ddd39c2536c8d": "Monogram",
   "b0cbc9acb4698e63": "Färg",
   "91547f3c1c36c209": "Inga ikoner hittades.",
+  "ee6db394257ae3a7": "Choose action icon",
+  "0ef83cff83f8a909": "Pick any Lucide icon for this action.",
   "236f83dec2ef4eba": "Bokstäver",
   "cd2acbace965052d": "En eller två bokstäver eller siffror.",
   "fc10b8da35c8560e": "Eller klistra in valfri emoji",

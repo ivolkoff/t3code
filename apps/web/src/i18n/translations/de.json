@@ -2671,6 +2671,7 @@
   "2d1f6668f713dca9": "Aktion hinzufügen",
   "da1b3bc9635dcdc8": "Aktionen sind projektbezogene Befehle, die du über die obere Leiste oder Tastenkürzel ausführen kannst.",
   "4614a422f1430cd7": "Name",
+  "9c6425bfbbebf750": "Other…",
   "d3502e7db0cdb998": "Tastenkürzel",
   "86f71ac04d41f95e": [
     "Drücke ein Tastenkürzel. Mit ",
@@ -8883,6 +8884,8 @@
   "094ddd39c2536c8d": "Monogramm",
   "b0cbc9acb4698e63": "Farbe",
   "91547f3c1c36c209": "Keine Symbole gefunden.",
+  "ee6db394257ae3a7": "Choose action icon",
+  "0ef83cff83f8a909": "Pick any Lucide icon for this action.",
   "236f83dec2ef4eba": "Buchstaben",
   "cd2acbace965052d": "Ein oder zwei Buchstaben oder Ziffern.",
   "fc10b8da35c8560e": "Oder füge ein beliebiges Emoji ein",
