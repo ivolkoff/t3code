@@ -67,6 +67,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  HistoryIcon,
   LayoutGridIcon,
   MessageSquareDashedIcon,
   LinkIcon,
@@ -263,6 +264,7 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { Checkbox } from "./ui/checkbox";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
+import { openImportAgentSessionDialog } from "./ImportAgentSessionDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import { openThreadTagPicker } from "../state/threadTagPicker";
@@ -1343,6 +1345,40 @@ function OpenCommandPaletteDialog(props: {
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: NEW_THREAD_IN_GROUP, label: "Projects", items: projectThreadItems }],
     });
+
+    const importProjectRef =
+      currentProjectEnvironmentId !== null && currentProjectId !== null
+        ? scopeProjectRef(currentProjectEnvironmentId, currentProjectId)
+        : defaultProjectRef;
+    const importProjectTitle = importProjectRef
+      ? projectByKey.get(`${importProjectRef.environmentId}:${importProjectRef.projectId}`)?.title
+      : undefined;
+    if (importProjectRef && importProjectTitle) {
+      actionItems.push({
+        kind: "action",
+        value: "action:import-cli-conversation",
+        searchTerms: [
+          "import",
+          "claude",
+          "codex",
+          "pi",
+          "session",
+          "conversation",
+          "resume",
+          "terminal",
+        ],
+        title: (
+          <>
+            Import CLI conversation into <span className="font-semibold">{importProjectTitle}</span>
+          </>
+        ),
+        searchTitle: `Import CLI conversation into ${importProjectTitle}`,
+        icon: <HistoryIcon className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          openImportAgentSessionDialog(importProjectRef);
+        },
+      });
+    }
   }
 
   if (scratchTargetEnvironmentId !== null) {

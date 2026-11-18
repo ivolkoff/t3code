@@ -164,6 +164,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.filesystemGetMetadata]: AuthFilesystemReadScope,
   [WS_METHODS.agentSessionsScan]: AuthOrchestrationReadScope,
   [WS_METHODS.agentSessionsImport]: AuthOrchestrationOperateScope,
+  // Lists first prompts of terminal conversations T3 never saw, not just project paths.
+  [WS_METHODS.agentSessionsList]: AuthOrchestrationOperateScope,
+  [WS_METHODS.agentSessionsImportOne]: AuthOrchestrationOperateScope,
   [WS_METHODS.assetsCreateUrl]: AuthOrchestrationReadScope,
   [WS_METHODS.assetsPersistChatAttachments]: AuthOrchestrationOperateScope,
   [WS_METHODS.attachmentsCreateUploadUrl]: AuthOrchestrationOperateScope,
