@@ -119,6 +119,7 @@ import { nativeLanguageName, SYSTEM_LANGUAGE } from "@t3tools/client-runtime/loc
 import { SUPPORTED_LOCALES } from "../../i18n/locales";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { AdvancedSettings } from "./AdvancedSettings";
+import { EventHooksSettings } from "./EventHooksSettings";
 import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
 import { StorageCleanupSections } from "./StorageSettings";
 import { UpdateTrackSwitchDialog } from "./UpdateTrackSwitchDialog";
@@ -2377,6 +2378,7 @@ export function ThreadsSettingsPanel() {
           />
         </AdvancedSettings>
       </SettingsSection>
+      <EventHooksSettings />
     </SettingsPageContainer>
   );
 }
