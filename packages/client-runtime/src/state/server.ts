@@ -1896,6 +1896,14 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:check-otlp-endpoint",
       tag: WS_METHODS.serverCheckOtlpEndpoint,
     }),
+    testEventHook: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:test-event-hook",
+      tag: WS_METHODS.serverTestEventHook,
+    }),
+    getEventHookRuns: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:get-event-hook-runs",
+      tag: WS_METHODS.serverGetEventHookRuns,
+    }),
     checkSecretSource: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:check-secret-source",
       tag: WS_METHODS.serverCheckSecretSource,
