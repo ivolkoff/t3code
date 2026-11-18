@@ -131,6 +131,23 @@ export function HostedBrowserWebview(props: {
     if (!bridge || serverColorScheme === undefined) return;
     withDesktopTab(runtimeTabId, () => bridge.setColorScheme(runtimeTabId, serverColorScheme));
   }, [runtimeTabId, serverColorScheme]);
+  const device = viewport._tag === "preset" && viewport.emulate !== false ? viewport : null;
+  const devicePresetId = device?.presetId ?? null;
+  const deviceWidth = device?.width ?? 0;
+  const deviceHeight = device?.height ?? 0;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- emulates the viewport preset's device in the desktop preview tab through the desktop bridge
+  useEffect(() => {
+    const bridge = window.desktopBridge?.preview;
+    if (!bridge) return;
+    withDesktopTab(runtimeTabId, () =>
+      bridge.setDevice(
+        runtimeTabId,
+        devicePresetId === null
+          ? null
+          : { presetId: devicePresetId, width: deviceWidth, height: deviceHeight },
+      ),
+    );
+  }, [runtimeTabId, devicePresetId, deviceWidth, deviceHeight]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies the server zoom factor to the desktop preview tab through the desktop bridge
   useEffect(() => {
     const bridge = window.desktopBridge?.preview;
@@ -371,6 +388,7 @@ export function HostedBrowserWebview(props: {
             aspectRatio={lockedAspectRatio}
             onAspectRatioChange={handleAspectRatioChange}
             onChange={commitViewportChange}
+            canEmulateDevice
           />
         ) : null}
         <div
