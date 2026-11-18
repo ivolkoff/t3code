@@ -92,6 +92,8 @@ export const PreviewViewportSetting = Schema.Union([
   Schema.TaggedStruct("preset", {
     ...PreviewViewportSize.fields,
     presetId: StoredPreviewViewportPresetId,
+    /** Absent means the desktop emulates the preset's device: User-Agent, pixel ratio and touch. */
+    emulate: Schema.optional(Schema.Boolean),
   }).check(viewportAreaFilter),
 ]);
 export type PreviewViewportSetting = typeof PreviewViewportSetting.Type;

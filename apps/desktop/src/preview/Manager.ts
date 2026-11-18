@@ -11,6 +11,7 @@ import type {
   DesktopPreviewAnnotationVoiceConfig,
   DesktopPreviewAnnotationVoiceState,
   DesktopPreviewColorScheme,
+  DesktopPreviewDevice,
   DesktopPreviewFavicon,
   DesktopPreviewFindResultEvent,
   DesktopPreviewOpenLinkEvent,
@@ -72,6 +73,7 @@ import {
 import * as DesktopBrowserHost from "./DesktopBrowserHost.ts";
 import * as PreviewPasskeys from "./Passkeys.ts";
 import * as BrowserSession from "./BrowserSession.ts";
+import type { PreviewDeviceEmulation } from "./previewUserAgent.ts";
 import {
   ANNOTATION_CAPTURED_CHANNEL,
   ANNOTATION_SEND_ENABLED_CHANNEL,
@@ -578,6 +580,12 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   let forwardedShortcuts: ReadonlyArray<PreviewForwardedShortcut> = [];
   const annotationThemeRef = yield* Ref.make(DEFAULT_ANNOTATION_THEME);
   const annotationSendEnabled = new Map<string, boolean>();
+  const tabDevices = new Map<
+    string,
+    { readonly device: DesktopPreviewDevice; emulation: PreviewDeviceEmulation | null }
+  >();
+  /** Applies that race the reload's own request see the same stale document. */
+  const documentReloads = new WeakMap<object, string | null>();
   const mainWindowRef = yield* Ref.make<Option.Option<BrowserWindow>>(Option.none());
   const tabsRef = yield* SynchronizedRef.make<ReadonlyMap<string, PreviewTabState>>(new Map());
   const attachedRef = yield* Ref.make<ReadonlyMap<number, ManagedListeners>>(new Map());
@@ -1804,6 +1812,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     if (!(yield* SynchronizedRef.get(tabsRef)).has(tabId)) return;
     clearPendingRecording(tabId);
     annotationSendEnabled.delete(tabId);
+    tabDevices.delete(tabId);
     yield* Effect.all(
       [
         cancelPickElement(tabId),
@@ -2059,6 +2068,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       guestLoadFailures.delete(webContentsId);
       runFork(hideDestroyedGuest(webContentsId));
       runFork(detachControlSession(webContentsId));
+      runFork(browserSession.emulateDevice(webContentsId, null));
     });
     yield* ensureControlSession(wc).pipe(
       Effect.catchCause((cause) =>
@@ -2553,7 +2563,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     control: BrowserControlSession,
     clearWhenNone: boolean,
   ) {
-    const identity = yield* browserSession.userAgentMetadata;
+    const identity = tabDevices.get(tabId)?.emulation ?? (yield* browserSession.userAgentMetadata);
     if (identity === null && !clearWhenNone) return;
     yield* attemptPromise(
       { operation: "applyUserAgentOverride", tabId, webContentsId: wc.id },
@@ -2564,6 +2574,53 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             ? { userAgent: "" }
             : { userAgent: identity.userAgent, userAgentMetadata: identity.metadata },
         ),
+    );
+  });
+
+  // Like media emulation, device emulation belongs to the debugger session.
+  const applyDevice = Effect.fnUntraced(function* (
+    tabId: string,
+    wc: Electron.WebContents,
+    control: BrowserControlSession,
+  ) {
+    const entry = tabDevices.get(tabId);
+    const emulation = yield* browserSession.emulateDevice(wc.id, entry?.device.presetId ?? null);
+    if (entry) entry.emulation = emulation;
+    const send = (method: string, params: Record<string, unknown>) =>
+      attemptPromise({ operation: "applyDevice", tabId, webContentsId: wc.id }, () =>
+        control.debugger.sendCommand(method, params),
+      );
+    if (entry === undefined || emulation === null) {
+      yield* send("Emulation.clearDeviceMetricsOverride", {});
+      yield* send("Emulation.setTouchEmulationEnabled", { enabled: false });
+    } else {
+      // Zero width and height keep the size the webview element gives the page.
+      yield* send("Emulation.setDeviceMetricsOverride", {
+        width: 0,
+        height: 0,
+        deviceScaleFactor: emulation.deviceScaleFactor,
+        mobile: emulation.mobile,
+        screenWidth: entry.device.width,
+        screenHeight: entry.device.height,
+      });
+      // No setEmitTouchEventsForMouse: its TouchEmulator is shared by the whole window, not this guest.
+      yield* send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    }
+    yield* applyUserAgentOverride(tabId, wc, control, true);
+    // The guest starts loading its src before the tab knows its device, so the first document can go out desktop.
+    const document = yield* browserSession.documentDevice(wc.id);
+    const presetId = emulation?.presetId ?? null;
+    if (
+      document === undefined ||
+      document.presetId === presetId ||
+      documentReloads.get(document) === presetId
+    ) {
+      return;
+    }
+    documentReloads.set(document, presetId);
+    // A reload while the first document is still loading would reload the blank initial entry.
+    yield* attempt({ operation: "applyDevice.reload", tabId, webContentsId: wc.id }, () =>
+      wc.isLoadingMainFrame() ? void wc.loadURL(document.url).catch(() => undefined) : wc.reload(),
     );
   });
 
@@ -2605,7 +2662,11 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           });
         }
       }
-      yield* applyUserAgentOverride(tabId, wc, control, false).pipe(Effect.ignore);
+      yield* (
+        tabDevices.has(tabId)
+          ? applyDevice(tabId, wc, control)
+          : applyUserAgentOverride(tabId, wc, control, false)
+      ).pipe(Effect.ignore);
       if (afterAttach.colorScheme !== "system") {
         yield* attemptPromise({ operation: "applyColorScheme", tabId, webContentsId: wc.id }, () =>
           control.debugger.sendCommand("Emulation.setEmulatedMedia", {
@@ -2663,6 +2724,22 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     const wc = webContents.fromId(webContentsId);
     if (!wc || wc.isDestroyed()) return;
     yield* applyColorScheme(tabId, wc, colorScheme);
+  });
+
+  const setDevice = Effect.fn("PreviewManager.setDevice")(function* (
+    tabId: string,
+    device: DesktopPreviewDevice | null,
+  ) {
+    const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+    if (!tab) {
+      return yield* new PreviewTabNotFoundError({ tabId });
+    }
+    if (device === null) tabDevices.delete(tabId);
+    else tabDevices.set(tabId, { device, emulation: null });
+    if (tab.webContentsId == null) return;
+    const wc = webContents.fromId(tab.webContentsId);
+    if (!wc || wc.isDestroyed()) return;
+    yield* applyDevice(tabId, wc, yield* ensureControlSession(wc));
   });
 
   const setShown = Effect.fn("PreviewManager.setShown")(function* (tabId: string, shown: boolean) {
@@ -3762,6 +3839,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     setShown,
     setCaptureDrawn,
     setColorScheme,
+    setDevice,
     refreshUserAgent,
     setMainWindow,
     setForwardedShortcuts: (shortcuts: ReadonlyArray<PreviewForwardedShortcut>) =>
@@ -3969,6 +4047,10 @@ export class PreviewManager extends Context.Service<
       tabId: string,
       colorScheme: DesktopPreviewColorScheme,
     ) => Effect.Effect<void, PreviewManagerError>;
+    readonly setDevice: (
+      tabId: string,
+      device: DesktopPreviewDevice | null,
+    ) => Effect.Effect<void, PreviewManagerError>;
     /** Re-sends the preset's User-Agent and Client Hints to every attached tab. */
     readonly refreshUserAgent: () => Effect.Effect<void>;
     readonly setZoomFactor: (
@@ -4140,6 +4222,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     findInPage: operations.findInPage,
     stopFindInPage: operations.stopFindInPage,
     setColorScheme: operations.setColorScheme,
+    setDevice: operations.setDevice,
     refreshUserAgent: operations.refreshUserAgent,
     setZoomFactor: operations.setZoomFactor,
     setAudioMuted: operations.setAudioMuted,

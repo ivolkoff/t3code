@@ -1,6 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { resolvePreviewUserAgent, resolvePreviewUserAgentMetadata } from "./previewUserAgent.ts";
+import {
+  resolvePreviewDeviceEmulation,
+  resolvePreviewUserAgent,
+  resolvePreviewUserAgentMetadata,
+} from "./previewUserAgent.ts";
 
 const engine = {
   chromeVersion: "152.0.7977.169",
@@ -86,5 +90,35 @@ describe("resolvePreviewUserAgent", () => {
         resolvePreviewUserAgentMetadata({ browserUserAgentPreset, browserUserAgent: "x" }, engine),
       );
     }
+  });
+});
+
+describe("resolvePreviewDeviceEmulation", () => {
+  it("maps a phone preset to its mobile identity and pixel ratio", () => {
+    const iphone = resolvePreviewDeviceEmulation("iphone-14-pro-max", engine)!;
+    assert.include(iphone.userAgent, "(iPhone; CPU iPhone OS 17_0 like Mac OS X)");
+    assert.strictEqual(iphone.deviceScaleFactor, 3);
+    assert.isTrue(iphone.mobile);
+    assert.include(iphone.metadata, { platform: "iOS", mobile: true });
+
+    const pixel = resolvePreviewDeviceEmulation("pixel-7", engine)!;
+    assert.strictEqual(
+      pixel.userAgent,
+      "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36",
+    );
+    assert.strictEqual(pixel.deviceScaleFactor, 2.625);
+    assert.include(pixel.metadata, { platform: "Android", model: "Pixel 7", mobile: true });
+  });
+
+  it("keeps touch laptops on a desktop layout", () => {
+    const surface = resolvePreviewDeviceEmulation("surface-pro-7", engine)!;
+    assert.isFalse(surface.mobile);
+    assert.include(surface.metadata, { platform: "Windows", mobile: false });
+  });
+
+  it("keeps the desktop identity without a known preset", () => {
+    assert.isNull(resolvePreviewDeviceEmulation(null, engine));
+    assert.isNull(resolvePreviewDeviceEmulation("iphone-15-pro", engine));
+    assert.isNull(resolvePreviewDeviceEmulation("pixel-7", { ...engine, chromeVersion: "" }));
   });
 });

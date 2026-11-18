@@ -15,6 +15,7 @@ import {
   DesktopPreviewSetShownInputSchema,
   DesktopPreviewSetCaptureDrawnInputSchema,
   DesktopPreviewSetColorSchemeInputSchema,
+  DesktopPreviewSetDeviceInputSchema,
   DesktopPreviewSetZoomFactorInputSchema,
   BrowserImportResult,
   BrowserImportSource,
@@ -215,6 +216,15 @@ const setColorScheme = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.preview.setColorScheme")(function* ({ tabId, colorScheme }) {
     const manager = yield* PreviewManager.PreviewManager;
     yield* manager.setColorScheme(tabId, colorScheme);
+  }),
+});
+const setDevice = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_SET_DEVICE_CHANNEL,
+  payload: DesktopPreviewSetDeviceInputSchema,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.preview.setDevice")(function* ({ tabId, device }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    yield* manager.setDevice(tabId, device);
   }),
 });
 const setAudioMuted = DesktopIpc.makeIpcMethod({
@@ -495,6 +505,7 @@ export const methods = [
   findInPage,
   stopFindInPage,
   setColorScheme,
+  setDevice,
   setZoomFactor,
   setAudioMuted,
   setShown,
