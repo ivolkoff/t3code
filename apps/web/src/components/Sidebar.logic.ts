@@ -22,7 +22,9 @@ import {
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ThreadId,
+  type VcsBranchStatus,
 } from "@t3tools/contracts";
+import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/reactivity";
 import {
@@ -169,6 +171,31 @@ export function withoutRemovedCheckout<
   T extends { readonly branch: string | null; readonly worktreePath: string | null },
 >(thread: T, gitStatus: { readonly isRepo?: boolean | undefined } | null): T {
   return gitStatus?.isRepo === false ? { ...thread, branch: null, worktreePath: null } : thread;
+}
+
+// Local threads share the project checkout, so its counts would describe the checkout, not the thread.
+export function resolveSidebarBranchDivergence(input: {
+  readonly status: VcsBranchStatus | null | undefined;
+  readonly branch: string | null;
+  readonly worktreePath: string | null;
+}): { readonly label: string; readonly description: string } | null {
+  const { status, branch } = input;
+  if (input.worktreePath === null || !branch || status?.refName !== branch) return null;
+  const ahead = status.aheadCount ?? 0;
+  const behind = status.behindCount ?? 0;
+  if (ahead === 0 && behind === 0) return null;
+  const commits = (count: number) => `${formatDiffCount(count)} commit${count === 1 ? "" : "s"}`;
+  return {
+    label: [ahead > 0 && `↑${formatDiffCount(ahead)}`, behind > 0 && `↓${formatDiffCount(behind)}`]
+      .filter(Boolean)
+      .join(" "),
+    description:
+      ahead > 0 && behind > 0
+        ? `${commits(ahead)} ahead, ${formatDiffCount(behind)} behind upstream`
+        : ahead > 0
+          ? `${commits(ahead)} ahead of upstream`
+          : `${commits(behind)} behind upstream`,
+  };
 }
 
 export function useRetainedValue<T>(key: string | null, value: T | null): T | null {

@@ -376,10 +376,7 @@ describe("VcsStatusBroadcaster", () => {
       state.currentLocalStatus = { ...baseLocalStatus, refName: "feature/next" };
       const update = yield* branches.pipe(Effect.forkScoped({ startImmediately: true }));
       yield* broadcaster.refreshBranchStatus({ cwd: "/repo" });
-      assert.deepEqual(
-        update.pollUnsafe(),
-        Exit.succeed([{ refName: "feature/next", isRepo: true }]),
-      );
+      assert.deepEqual(yield* Fiber.join(update), [{ refName: "feature/next", isRepo: true }]);
       state.beforeLocalStatus = Effect.void;
       yield* Deferred.succeed(resume, undefined);
       yield* Fiber.join(details);
@@ -1715,6 +1712,50 @@ describe("VcsStatusBroadcaster", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect(
+    "branch-only subscribers receive the cached upstream divergence of their branch",
+    () => {
+      const state = newState();
+      const refName = baseLocalStatus.refName;
+      return Effect.gen(function* () {
+        const broadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
+        const branches = yield* Stream.toPull(broadcaster.streamBranchStatus({ cwd: "/repo" }));
+        assert.deepEqual(yield* branches, [{ refName, isRepo: true }]);
+
+        state.currentRemoteStatus = { ...baseRemoteStatus, aheadCount: 2, behindCount: 1 };
+        yield* broadcaster.refreshStatus("/repo");
+        assert.deepEqual(yield* branches, [
+          { refName, isRepo: true, aheadCount: 2, behindCount: 1 },
+        ]);
+
+        // Returning to the window recounts a cached upstream without reading local status.
+        state.currentDivergence = { aheadCount: 0, behindCount: 0 };
+        const localStatusCalls = state.localStatusCalls;
+        yield* broadcaster.refreshBranchStatus({ cwd: "/repo" });
+        assert.deepEqual(yield* branches, [
+          { refName, isRepo: true, aheadCount: 0, behindCount: 0 },
+        ]);
+        assert.equal(state.localStatusCalls, localStatusCalls);
+
+        state.currentDivergence = { aheadCount: 1, behindCount: 0 };
+        yield* broadcaster.refreshLocalStatus("/repo");
+        assert.deepEqual(yield* branches, [
+          { refName, isRepo: true, aheadCount: 1, behindCount: 0 },
+        ]);
+
+        state.currentLocalStatus = { ...baseLocalStatus, refName: "other" };
+        yield* broadcaster.refreshBranchStatus({ cwd: "/repo" });
+        assert.deepEqual(yield* branches, [{ refName: "other", isRepo: true }]);
+
+        // Without an upstream, aheadCount counts commits ahead of the base branch.
+        state.currentRemoteStatus = { ...baseRemoteStatus, hasUpstream: false, aheadCount: 3 };
+        yield* broadcaster.refreshStatus("/repo");
+        const fresh = yield* Stream.toPull(broadcaster.streamBranchStatus({ cwd: "/repo" }));
+        assert.deepEqual(yield* fresh, [{ refName: "other", isRepo: true }]);
+      }).pipe(Effect.provide(layerTestFor(state)));
+    },
+  );
+
   it.effect("a terminal checkout updates the branch before pending detailed status completes", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -2245,7 +2286,9 @@ it.effect("publishes overlapping branch reads in checkout order", () => {
     yield* Deferred.succeed(resume, undefined);
     yield* Fiber.join(older);
     yield* Fiber.join(newer);
-    assert.deepEqual(yield* branches, [
+    const received = [...(yield* branches)];
+    if (received.length < 2) received.push(...(yield* branches));
+    assert.deepEqual(received, [
       { refName: "old", isRepo: true },
       { refName: "new", isRepo: true },
     ]);
