@@ -205,6 +205,20 @@ the start, and scripts can tag threads with `t3 thread tag`.
 Tags need a server version with tag support. On older servers, the tag controls are
 hidden.
 
+## Working-on line
+
+A thread can show one line naming the task it works on now, such as a ticket or bug. It
+appears after the title in the thread header, and on web and desktop under the title in the
+two-line sidebar layouts; the compact sidebar shows it when you hover the thread. Agents set it
+on multi-step tasks and clear it when the task is done. To set, change or clear it yourself,
+click the line in the header or choose **Set working-on line…** from the header's thread menu,
+then press Enter; an empty line clears it. Scripts use `t3 thread working-on "$id" "…"` or
+`--clear`.
+
+When the thread's own agent clears its line and the run ends, the timeline shows **Task looks
+done** with **Settle** and **Continue**. Continue dismisses it on every device. Clearing the line
+yourself or from a script does not offer to settle.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

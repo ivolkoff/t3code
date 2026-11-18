@@ -188,6 +188,9 @@ export interface EnvironmentThreadShell {
   readonly pinnedAt: string | null;
   readonly autoSettleDisabledAt?: string | null;
   readonly tags?: ReadonlyArray<string>;
+  /** `undefined` means the server predates the working-on line, so clients hide it. */
+  readonly workingOn?: string | null;
+  readonly workingOnDoneAt?: string | null;
   readonly pinOrderKey: string | null;
   readonly activeOrderKey: string | null;
   readonly pullRequests: ReadonlyArray<import("@t3tools/contracts").ThreadPullRequestLink>;
@@ -344,6 +347,12 @@ export function presentThreadShell(
     pinnedAt: nullableIso(thread.pinnedAt ?? null),
     autoSettleDisabledAt: nullableIso(thread.autoSettleDisabledAt ?? null),
     ...(thread.tags === undefined ? {} : { tags: thread.tags }),
+    ...(thread.workingOn === undefined
+      ? {}
+      : {
+          workingOn: thread.workingOn,
+          workingOnDoneAt: nullableIso(thread.workingOnDoneAt ?? null),
+        }),
     pinOrderKey: thread.pinOrderKey ?? null,
     activeOrderKey: thread.activeOrderKey ?? null,
     ...(thread.lastVisitedAt === undefined

@@ -1237,6 +1237,7 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
       commandId: CommandId.make("link-parent-pr"),
       threadId: parentThreadId,
       linkedPullRequest: parentPullRequest,
+      workingOn: "Parent task",
     });
     yield* orchestrator.dispatch({
       type: "message.dispatch",
@@ -1270,6 +1271,15 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     const child = yield* projections.getThreadProjection(childThreadId);
     assert.isNull(child.thread.linkedPullRequest);
     assert.deepEqual(child.thread.pullRequests, []);
+    assert.isNull(child.thread.workingOn);
+    yield* orchestrator.dispatch({
+      type: "thread.metadata.update",
+      commandId: CommandId.make("clear-empty-child-working-on"),
+      threadId: childThreadId,
+      workingOn: null,
+      workingOnDone: true,
+    });
+    assert.isNull((yield* projections.getThreadProjection(childThreadId)).thread.workingOnDoneAt);
     assert.equal(child.thread.branch, parent.thread.branch);
     assert.equal(child.thread.worktreePath, parent.thread.worktreePath);
     assert.equal(child.thread.lineage.parentThreadId, parentThreadId);
@@ -1294,6 +1304,25 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     const parentAfterChildLink = yield* projections.getThreadProjection(parentThreadId);
     assert.deepEqual(parentAfterChildLink.thread.linkedPullRequest, parentPullRequest);
     assert.deepEqual(parentAfterChildLink.thread.pullRequests, parent.thread.pullRequests);
+    assert.equal(parentAfterChildLink.thread.workingOn, "Parent task");
+
+    yield* orchestrator.dispatch({
+      type: "thread.metadata.update",
+      commandId: CommandId.make("clear-parent-working-on"),
+      threadId: parentThreadId,
+      workingOn: null,
+      workingOnDone: true,
+    });
+    const doneParent = (yield* projections.getThreadProjection(parentThreadId)).thread;
+    assert.isNull(doneParent.workingOn);
+    assert.isNotNull(doneParent.workingOnDoneAt);
+    yield* orchestrator.dispatch({
+      type: "thread.metadata.update",
+      commandId: CommandId.make("continue-parent-working-on"),
+      threadId: parentThreadId,
+      workingOnDone: false,
+    });
+    assert.isNull((yield* projections.getThreadProjection(parentThreadId)).thread.workingOnDoneAt);
   }).pipe(Effect.provide(layerTest)),
 );
 

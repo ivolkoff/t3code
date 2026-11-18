@@ -8,6 +8,7 @@ import {
   ProjectId,
   RunId,
   ThreadId,
+  ThreadMetadataMcpUpdateResult,
   TrimmedNonEmptyString,
   type OrchestratorMcpThreadListItem,
   type OrchestratorMcpThreadRun,
@@ -980,6 +981,44 @@ const threadDeleteCommand = Command.make("delete", {
   ),
 );
 
+const threadWorkingOnCommand = Command.make("working-on", {
+  ...projectLocationFlags,
+  thread: threadArgument,
+  text: Argument.String("text").pipe(
+    Argument.withDescription("One line naming the task the thread works on now."),
+    Argument.optional,
+  ),
+  clear: Flag.Boolean("clear").pipe(
+    Flag.withDescription("Clear the line instead of setting it."),
+    Flag.withDefault(false),
+  ),
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription("Set or clear the line naming what a thread works on."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const threadId = yield* decodeThreadId(flags.thread);
+      if (Option.isSome(flags.text) === flags.clear) {
+        return yield* new ThreadUsageError({ detail: "Pass either the text or --clear." });
+      }
+      const workingOn = Option.getOrNull(flags.text);
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.workingOn")(function* (tools) {
+          const updated = yield* tools.call(
+            "t3_thread_update",
+            { threadId, action: "set_working_on", workingOn },
+            ThreadMetadataMcpUpdateResult,
+          );
+          yield* flags.json
+            ? printJson(updated)
+            : Console.log(workingOn === null ? "Cleared." : "Set.");
+        }),
+      );
+    }).pipe(reportThreadErrors),
+  ),
+);
+
 const threadTagCommand = (action: "tag" | "untag") =>
   Command.make(action, {
     ...projectLocationFlags,
@@ -1017,5 +1056,6 @@ export const threadCommand = Command.make("thread").pipe(
     threadTagCommand("tag"),
     threadTagCommand("untag"),
     threadDeleteCommand,
+    threadWorkingOnCommand,
   ]),
 );

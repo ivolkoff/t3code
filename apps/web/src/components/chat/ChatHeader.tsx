@@ -1,5 +1,6 @@
 import {
   AuthOrchestrationOperateScope,
+  THREAD_WORKING_ON_MAX_LENGTH,
   type EnvironmentId,
   type ScopedThreadRef,
   type ThreadId,
@@ -53,6 +54,8 @@ interface ChatHeaderProps {
   activeThreadTitle: string;
   activeThreadTags?: ReadonlyArray<string> | undefined;
   activeThreadLinkOrigin?: string | null | undefined;
+  /** `undefined` when the server predates the working-on line. */
+  activeThreadWorkingOn?: string | null | undefined;
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
   parentThreadLink: { threadId: ThreadId; title: string } | null;
@@ -79,6 +82,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadTitle,
   activeThreadTags,
   activeThreadLinkOrigin,
+  activeThreadWorkingOn,
   isServerThread,
   activeProject,
   parentThreadLink,
@@ -126,6 +130,15 @@ export const ChatHeader = memo(function ChatHeader({
       ? renaming.title
       : null;
   const isRenamingTitle = renamingTitle !== null;
+  const [workingOnEdit, setWorkingOnEdit] = useState<ScopedThreadRef | null>(null);
+  const isEditingWorkingOn =
+    canOperateThread &&
+    activeThreadWorkingOn !== undefined &&
+    workingOnEdit?.threadId === activeThreadId &&
+    workingOnEdit.environmentId === activeThreadEnvironmentId;
+  if (workingOnEdit !== null && !isEditingWorkingOn) {
+    setWorkingOnEdit(null);
+  }
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the breadcrumb list DOM via ResizeObserver, a frame and font loads to collapse the parent title
   useEffect(() => {
     const list = breadcrumbContainerRef.current?.querySelector("ol");
@@ -206,10 +219,52 @@ export const ChatHeader = memo(function ChatHeader({
       }
     });
   };
+  const workingOnCommittedRef = useRef(false);
+  const startWorkingOnEdit = () => {
+    if (
+      !isServerThread ||
+      activeThreadWorkingOn === undefined ||
+      !readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)
+    )
+      return;
+    workingOnCommittedRef.current = false;
+    setWorkingOnEdit(activeThreadRef);
+  };
+  const commitWorkingOn = (value: string) => {
+    setWorkingOnEdit(null);
+    if (!readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)) return;
+    const workingOn = value.replace(/[\p{Cc}]+/gu, " ").trim() || null;
+    if (workingOn === (activeThreadWorkingOn ?? null)) return;
+    void updateThreadMetadata({
+      environmentId: activeThreadEnvironmentId,
+      input: { threadId: activeThreadId, workingOn },
+    }).then((result) => {
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Failed to update the working-on line",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
+      }
+    });
+  };
+  const handleWorkingOnKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (event.key === "Enter") {
+      workingOnCommittedRef.current = true;
+      commitWorkingOn(event.currentTarget.value);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      workingOnCommittedRef.current = true;
+      setWorkingOnEdit(null);
+    }
+  };
   const { openMenu, closeMenu } = useThreadActionMenu({
     threadRef: isServerThread ? activeThreadRef : null,
     projectCwd: activeProjectCwd,
     onStartRename: startRename,
+    onStartWorkingOnEdit: startWorkingOnEdit,
     onFind: onFindInThread,
     canShareWithGuest,
   });
@@ -226,7 +281,7 @@ export const ChatHeader = memo(function ChatHeader({
     startRename();
   };
   const handleHeaderContextMenu = (event: ReactMouseEvent) => {
-    if (renamingTitle !== null) return;
+    if (renamingTitle !== null || isEditingWorkingOn) return;
     if (!isServerThread && onOpenProjectSettings === undefined) return;
     event.preventDefault();
     if (!isServerThread) {
@@ -397,6 +452,41 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {renamingTitle !== null ? null : isEditingWorkingOn ? (
+            <input
+              autoFocus
+              dir="auto"
+              aria-label="Working on"
+              placeholder="What is this thread working on?"
+              maxLength={THREAD_WORKING_ON_MAX_LENGTH}
+              className="ml-2 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-muted-foreground outline-none ring-1 ring-inset ring-ring/50 focus:ring-ring"
+              defaultValue={activeThreadWorkingOn ?? ""}
+              onBlur={(event) => {
+                if (workingOnCommittedRef.current) return;
+                commitWorkingOn(event.currentTarget.value);
+              }}
+              onFocus={(event) => event.currentTarget.select()}
+              onKeyDown={handleWorkingOnKeyDown}
+            />
+          ) : isServerThread && activeThreadWorkingOn ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`Working on: ${activeThreadWorkingOn}`}
+                    onClick={canOperateThread ? startWorkingOnEdit : undefined}
+                    className="ml-2 min-w-0 shrink-[9999] cursor-pointer rounded-sm text-left font-normal text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  />
+                }
+              >
+                <WorkspaceBreadcrumbText dir={textDirection(activeThreadWorkingOn)}>
+                  · {activeThreadWorkingOn}
+                </WorkspaceBreadcrumbText>
+              </TooltipTrigger>
+              <TooltipPopup side="top">Working on: {activeThreadWorkingOn}</TooltipPopup>
+            </Tooltip>
+          ) : null}
           {renamingTitle === null ? (
             canEditTags && (activeThreadTags?.length ?? 0) > 0 ? (
               <button
