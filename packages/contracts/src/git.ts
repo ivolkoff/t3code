@@ -115,6 +115,9 @@ export const VcsBranchStatus = Schema.Struct({
   refName: Schema.NullOr(Schema.String),
   /** Absent from older servers, where a removed checkout looks like a detached HEAD. */
   isRepo: Schema.optional(Schema.Boolean),
+  /** Upstream divergence from the server's cached remote status; absent when unknown or without an upstream. */
+  aheadCount: Schema.optional(NonNegativeInt),
+  behindCount: Schema.optional(NonNegativeInt),
 });
 export type VcsBranchStatus = typeof VcsBranchStatus.Type;
 
