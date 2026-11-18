@@ -162,6 +162,14 @@ Pinned threads stay above the folders, and Snoozed and Settled stay below them. 
 can drag a thread onto the composer to mention it, but not within the sidebar, and the Working
 section is off. Each device keeps its own choice.
 
+### Watch working threads
+
+The **Dashboard** shows up to nine threads at once, each with its status and the last few
+lines of its work. Threads that need you come first, then working threads, then finished
+threads you have not opened yet (from the last 12 hours), then pinned threads. Open it from
+the grid button at the bottom of the sidebar, **Open dashboard** in the command palette, or
+**Cmd+Option+G** on macOS and **Ctrl+Alt+G** on Windows/Linux. Click a card to open its thread. The dashboard is view-only: approve, answer, or stop from the thread itself.
+
 ## Tag threads
 
 Tags group threads that belong together across projects and states, such as `review`,
