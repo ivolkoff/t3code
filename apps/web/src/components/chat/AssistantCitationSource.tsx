@@ -165,6 +165,14 @@ function observeAssistantCitationSource({
     const state = list.getState();
     const index = state.indexByKey(itemKey);
     if (index === undefined || !(state.sizeAtIndex(index) > 0)) return;
+    // Folded text is clipped or cut short, so resolve the quote only once find's reveal opens it.
+    if (!activation.scrolled) {
+      const folds = root.querySelectorAll("[data-thread-find-fold]");
+      if (folds.length > 0) {
+        for (const fold of folds) fold.dispatchEvent(new Event("beforematch"));
+        return;
+      }
+    }
     const range = resolveAssistantCitationRange(root, request.citation);
     const rect = (range ?? root).getBoundingClientRect();
     if (rect.height <= 0 || scrollNode.clientHeight <= 0) {

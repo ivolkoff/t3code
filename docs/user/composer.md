@@ -128,9 +128,9 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 
 ## Quote an assistant response
 
-On web and desktop, select text within one assistant response and choose
-**Cite in composer**. You can add a comment about the quote and write instructions
-around it.
+On web and desktop, select text within one assistant response or proposed plan and choose
+**Cite in composer**. Triple-click selects a whole paragraph or list item. You can add a comment
+about the quote and write instructions around it.
 
 Select the quote in a draft or sent message to return to its source. If the source
 is unavailable or has changed, the saved quote remains readable.
