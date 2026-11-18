@@ -213,6 +213,17 @@ export const DesktopSnapShotShortcutAvailability = Schema.Struct({
 });
 export type DesktopSnapShotShortcutAvailability = typeof DesktopSnapShotShortcutAvailability.Type;
 
+export const DesktopDockAttentionItem = Schema.Struct({
+  environmentId: TrimmedNonEmptyString,
+  threadId: TrimmedNonEmptyString,
+  label: Schema.String.check(Schema.isMaxLength(200)),
+  group: Schema.Literals(["attention", "done"]),
+});
+export type DesktopDockAttentionItem = typeof DesktopDockAttentionItem.Type;
+export const DesktopDockAttentionItems = Schema.Array(DesktopDockAttentionItem).check(
+  Schema.isMaxLength(10),
+);
+
 export const DesktopSnapShotId = TrimmedNonEmptyString.check(
   Schema.isMaxLength(64),
   Schema.isPattern(/^[a-f0-9-]+$/i),
@@ -1094,6 +1105,8 @@ export interface DesktopBridge {
   restartAudioService?: () => Promise<boolean>;
   setNotificationBadge: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear: (listener: () => void) => () => void;
+  /** macOS only: the threads the Dock icon's menu lists. */
+  setDockAttention?: (items: readonly DesktopDockAttentionItem[]) => Promise<void>;
   onTrackpadScrollBegin: (listener: () => void) => () => void;
   onTrackpadScrollEnd: (listener: () => void) => () => void;
   /**

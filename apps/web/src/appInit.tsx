@@ -16,6 +16,7 @@ import { startPreviewTitleRecording } from "./browserHistoryStore";
 import { retainThreadOverlaysForThread } from "./components/chat/threadOverlayRetention";
 import { resolveWindowTitleThreadStatus } from "./components/Sidebar.logic";
 import { startBackgroundThreadAnnouncements } from "./components/BackgroundThreadAnnouncer";
+import { startDockAttention } from "./components/DockAttention";
 import { startSshPasswordPromptQueue } from "./components/desktop/SshPasswordPromptDialog";
 import { startHostFreezeToasts } from "./components/HostFreezeToastCoordinator";
 import { startKeybindingsUpdateToasts } from "./components/KeybindingsUpdateToast";
@@ -301,6 +302,9 @@ export function startAppServices(): AppRouter {
   startMainAppLocationTracking(router);
   startWorkspaceFocus(router);
   startBackgroundThreadAnnouncements(appAtomRegistry, router);
+  if (isElectron && window.desktopBridge?.getClientPlatform() === "darwin") {
+    startDockAttention(appAtomRegistry);
+  }
   startThreadVisitedMigration(appAtomRegistry);
   startSshPasswordPromptQueue();
 

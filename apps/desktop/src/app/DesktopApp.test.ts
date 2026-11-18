@@ -50,6 +50,7 @@ import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts"
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
+import * as DesktopWindowToggleShortcut from "../window/DesktopWindowToggleShortcut.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 
 import * as BrowserImport from "../preview/BrowserImport/BrowserImport.ts";
@@ -165,6 +166,9 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
         Effect.provideService(DesktopSnapShot.DesktopSnapShot, {
           initialize: Effect.void,
         } as DesktopSnapShot.DesktopSnapShot["Service"]),
+        Effect.provideService(DesktopWindowToggleShortcut.DesktopWindowToggleShortcut, {
+          initialize: Effect.void,
+        } as DesktopWindowToggleShortcut.DesktopWindowToggleShortcut["Service"]),
         Effect.provideService(DesktopState.DesktopState, {
           quitting,
         } as DesktopState.DesktopState["Service"]),

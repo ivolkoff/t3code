@@ -77,6 +77,7 @@ import * as LoopbackTunnel from "./preview/LoopbackTunnel.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PreviewPasskeys from "./preview/Passkeys.ts";
 import * as DesktopWindow from "./window/DesktopWindow.ts";
+import * as DesktopWindowToggleShortcut from "./window/DesktopWindowToggleShortcut.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "./wsl/DesktopWslServerTree.ts";
@@ -182,10 +183,10 @@ const layerDesktopWindow = DesktopWindow.layer.pipe(
   Layer.provideMerge(layerDesktopPreview),
 );
 
-const layerDesktopSnapShot = DesktopSnapShot.layer.pipe(
-  Layer.provideMerge(layerDesktopWindow),
-  Layer.provideMerge(layerDesktopFoundation),
-);
+const layerDesktopSnapShot = Layer.mergeAll(
+  DesktopSnapShot.layer,
+  DesktopWindowToggleShortcut.layer,
+).pipe(Layer.provideMerge(layerDesktopWindow), Layer.provideMerge(layerDesktopFoundation));
 const layerDesktopAppActivation = DesktopAppActivation.layer.pipe(
   Layer.provide(layerDesktopWindow),
 );
