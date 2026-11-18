@@ -70,6 +70,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  LayoutGridIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -1758,6 +1759,18 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "usage.open",
     run: async () => {
       await navigate({ to: "/usage" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:dashboard",
+    searchTerms: ["dashboard", "grid", "overview", "live", "working", "threads"],
+    title: gt("Open dashboard"),
+    icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "dashboard.open",
+    run: async () => {
+      await navigate({ to: "/dashboard" });
     },
   });
 

@@ -15,6 +15,9 @@ import * as Keybindings from "./keybindings.ts";
 import * as SharedKeybindings from "@t3tools/shared/keybindings";
 import { KeybindingsConfigError, MAX_KEYBINDINGS_COUNT } from "@t3tools/contracts";
 
+const PERSISTED_DEFAULT_KEYBINDINGS = SharedKeybindings.DEFAULT_KEYBINDINGS.filter(
+  (rule) => rule.command !== "dashboard.open",
+);
 const KeybindingsConfigJson = Schema.fromJsonString(KeybindingsConfig);
 const encodeKeybindingsConfigJson = Schema.encodeEffect(KeybindingsConfigJson);
 const decodeKeybindingsConfigJson = Schema.decodeUnknownEffect(KeybindingsConfigJson);
@@ -143,7 +146,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       });
 
       const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
-      assert.deepEqual(persisted, SharedKeybindings.DEFAULT_KEYBINDINGS);
+      assert.deepEqual(persisted, PERSISTED_DEFAULT_KEYBINDINGS);
     }).pipe(Effect.provide(layerKeybindings())),
   );
 
@@ -238,12 +241,14 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
           persisted.some((entry) => entry.command === "terminal.toggle" && entry.key === "mod+j"),
         );
 
-        for (const defaultRule of SharedKeybindings.DEFAULT_KEYBINDINGS) {
+        for (const defaultRule of PERSISTED_DEFAULT_KEYBINDINGS) {
           assert.isTrue(byCommand.has(defaultRule.command), `expected ${defaultRule.command}`);
         }
         assert.isTrue(byCommand.has("script.run-tests.run"));
+        assert.isFalse(byCommand.has("dashboard.open"));
 
         const configState = yield* keybindings.loadConfigState;
+        assert.isTrue(configState.keybindings.some((entry) => entry.command === "dashboard.open"));
         assert.deepEqual(
           configState.keybindings
             .filter((entry) => entry.shortcut.key === "b" && entry.shortcut.shiftKey)
@@ -384,13 +389,21 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       yield* writeKeybindingsConfig(keybindingsConfigPath, [
         { key: "mod+r", command: "script.run-tests.run" },
         { key: "mod+shift+r", command: "script.run-tests.run" },
+        { key: "mod+shift+g", command: "dashboard.open" },
       ]);
       yield* Effect.gen(function* () {
         const keybindings = yield* Keybindings.Keybindings;
-        return yield* keybindings.upsertKeybindingRule({
+        yield* keybindings.upsertKeybindingRule({
           key: "mod+alt+r",
           command: "script.run-tests.run",
           replace: { key: "mod+r", command: "script.run-tests.run" },
+        });
+        // Reset to default of a runtime-only default drops the override instead of persisting it.
+        return yield* keybindings.upsertKeybindingRule({
+          key: "mod+alt+g",
+          command: "dashboard.open",
+          when: "!terminalFocus",
+          replace: { key: "mod+shift+g", command: "dashboard.open" },
         });
       });
 
