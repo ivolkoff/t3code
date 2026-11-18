@@ -1748,6 +1748,7 @@
   "181677cda4d3fd0a": "프로젝트를 추가할 수 있는 연결된 환경이 없습니다",
   "3a0bf3d17f31584e": "{project}에서 새 스레드",
   "4b4b64cc95acb8da": "다음에서 새 스레드...",
+  "d0f49124382e89f6": "Import CLI conversation into {project}",
   "3f581e98c86df72a": "프로젝트 없이 새 스레드",
   "e510d9a7b684fbfe": "이슈 분류",
   "cce3d80a2ddf1125": "에이전트가 T3 Code 문제를 조사하고 이슈 작성을 돕습니다",
@@ -1839,6 +1840,19 @@
     "에서",
     " ",
     "새 스레드"
+  ],
+  "7f14c5d5a7688c87": [
+    "Import CLI conversation into",
+    " ",
+    {
+      "t": "span",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    }
   ],
   "dbc0288da29ce1d4": "메시지를 검색하는 중…",
   "360702bf29668cf7": "폴더를 불러오는 중...",
@@ -2148,6 +2162,12 @@
   "c65de112b48a66ed": "페어링 링크 추가",
   "bc8ab792af1d656f": "컴퓨터에서 실행:",
   "0ba14e4e920cfa00": "또는 데스크톱 앱 다운로드",
+  "db08f95226af66e3": "Already in T3 Code",
+  "54e0d6b605fda1cf": "Continue a Claude Code, Codex or Pi conversation from {project} in T3 Code.",
+  "f331385f8cac1af0": "Continue a Claude Code, Codex or Pi conversation from this project in T3 Code.",
+  "ea6312740f4607a9": "Filter conversations",
+  "a6ebef3a2691939f": "Its T3 thread was deleted",
+  "e424aa04d80d8281": "Open",
   "0e79b7a6508a6286": "그다음",
   "363b9991fa23d36b": [
     "이미 ",
@@ -2420,6 +2440,7 @@
   "e54720cac68f2adb": "모든 프로젝트",
   "ac47f86df1c31a4a": "브랜치를 복사하지 못했습니다",
   "4e6305459e784fea": "스레드 ID를 복사하지 못했습니다",
+  "117dc95ba8910385": "Import CLI conversation…",
   "5a79b7c910831c76": "스레드 제목은 비워 둘 수 없습니다",
   "5c14b37b13312503": "스레드 이름을 바꾸지 못했습니다",
   "fc97f746bdabe59f": "스레드를 정리하지 못했습니다",
@@ -7209,6 +7230,13 @@
   "a14d6b345367b538": "가져옴",
   "cfcd9033ce52caea": "가져오는 중",
   "0ed7587d53e6ef4f": "가져오기",
+  "29913956244f5a36": "Import CLI conversation",
+  "07ddd60d9e1bccd6": "You need permission to run agents on this machine to import conversations.",
+  "40b678d13e92ec8e": "Finding conversations…",
+  "98eeb44dd1d970ec": "No Claude Code, Codex or Pi conversations found for this folder.",
+  "ef48507efdd40091": "No conversations match.",
+  "064eb99bc5c97759": "Showing the 200 most recent.",
+  "7833d281dd87a391": "Some conversations may be missing.",
   "eba6f410ffc4c9f8": "삭제하는 중",
   "42963d4a5dbc5e5c": "삭제",
   "006fab820cc5a2f1": "더 불러오기",
