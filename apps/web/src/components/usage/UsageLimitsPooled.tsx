@@ -6,12 +6,14 @@ import {
   collectLimitPools,
   cursorUsageWindowDetails,
   displayLimitWindows,
+  formatPaceReserve,
   formatResetsIn,
   type LimitAccount,
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
   type ResetCreditChoice,
   resetCreditChoices,
@@ -145,7 +147,7 @@ function SegmentPopover({
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const reserve = paceReservePercent(window, now);
   const resetsIn = formatResetsIn(window, now);
   const where =
     account.environments.length > 0
@@ -188,7 +190,7 @@ function SegmentPopover({
             {resetsIn ? ` · ${resetsIn.replace("resets in ", "in ")}` : ""}
           </Row>
         ) : null}
-        {timeLeft !== null ? <Row label="Even pace">{timeLeft}% left by now</Row> : null}
+        {reserve !== null ? <Row label="Even pace">{formatPaceReserve(reserve)}</Row> : null}
         {reset && reset.restoresPercent > 0 ? (
           <Row label="Restores">+{reset.restoresPercent}% of pool</Row>
         ) : null}

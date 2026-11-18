@@ -7,8 +7,10 @@ import type {
 import {
   collectProviderUsageLimits,
   formatDuration,
+  formatPaceReserve,
   limitsNotice,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import type { ReactNode } from "react";
@@ -142,6 +144,7 @@ function LimitRow({
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const left = remainingPercent(window);
   const timeLeft = paceRemainingPercent(window, now);
+  const reserve = paceReservePercent(window, now);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   return (
     <UsageRow
@@ -161,7 +164,7 @@ function LimitRow({
               {resetsAt > now ? ` · in ${formatDuration(resetsAt - now)}` : ""}
             </Row>
           ) : null}
-          {timeLeft !== null ? <Row label="Even pace">{timeLeft}% left by now</Row> : null}
+          {reserve !== null ? <Row label="Even pace">{formatPaceReserve(reserve)}</Row> : null}
         </div>
       }
     />
