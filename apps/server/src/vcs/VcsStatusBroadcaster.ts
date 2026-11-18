@@ -1185,12 +1185,76 @@ export const make = Effect.gen(function* () {
       }),
     );
 
+  // Writes the cache directly: updateCachedRemoteStatus drops remote while a branch-only refresh
+  // has cleared local.
+  const recountCachedDivergence = Effect.fn("VcsStatusBroadcaster.recountCachedDivergence")(
+    function* (cwd: string, refName: string | null) {
+      const divergence = yield* workflow.upstreamDivergence(cwd);
+      const [changed, value] = yield* Ref.modify(
+        cacheRef,
+        (
+          cache,
+        ): readonly [
+          readonly [boolean, VcsStatusRemoteResult | null],
+          Map<string, CachedVcsStatus>,
+        ] => {
+          const previous = cache.get(cwd);
+          const remote = previous?.remote;
+          if (!previous || !remote?.value || remote.branch !== (divergence?.refName ?? refName)) {
+            return [[false, null], cache];
+          }
+          const value = divergence && {
+            ...remote.value,
+            aheadCount: divergence.aheadCount,
+            behindCount: divergence.behindCount,
+          };
+          const next = value
+            ? { branch: remote.branch, value, fingerprint: fingerprintStatusPart(value) }
+            : null;
+          return [
+            [next?.fingerprint !== remote.fingerprint, value],
+            new Map(cache).set(cwd, { ...previous, remote: next }),
+          ];
+        },
+      );
+      if (changed) {
+        yield* PubSub.publish(changesPubSub, {
+          cwd,
+          event: { _tag: "remoteUpdated", remote: value },
+        });
+      }
+    },
+  );
+
+  const cachedDivergence = (cwd: string, refName: string | null) =>
+    getCachedStatus(cwd).pipe(
+      Effect.map((cached) => {
+        const remote = cached?.remote;
+        return remote?.value?.hasUpstream && remote.branch === refName
+          ? { aheadCount: remote.value.aheadCount, behindCount: remote.value.behindCount }
+          : {};
+      }),
+    );
+
   const refreshBranchStatus: VcsStatusBroadcaster["Service"]["refreshBranchStatus"] = Effect.fn(
     "VcsStatusBroadcaster.refreshBranchStatus",
   )(function* (input) {
     const cwd = yield* withFileSystem(normalizeCwd(input.cwd));
     if (!detailedSubscribers.has(cwd)) {
       const { refName, isRepo } = yield* refreshBranchStatusCore(cwd);
+      const remote = (yield* getCachedStatus(cwd))?.remote;
+      // Without a detailed subscriber nothing else rereads this cached count until a turn ends here.
+      if (remote?.value?.hasUpstream && remote.branch === refName) {
+        yield* withRemoteWriteLock(cwd, recountCachedDivergence(cwd, refName)).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("VCS divergence recount failed", {
+              cwdLength: cwd.length,
+              ...remoteRefreshFailureDiagnostics(cause),
+            }),
+          ),
+          Effect.forkIn(broadcasterScope),
+        );
+      }
       return { refName, isRepo };
     }
     const { observation, refName, isRepo } = yield* readHeadBranch(cwd);
@@ -1212,17 +1276,40 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         const cwd = yield* withFileSystem(normalizeCwd(input.cwd));
         const subscription = yield* PubSub.subscribe(branchChangesPubSub);
+        const remoteChanges = yield* PubSub.subscribe(changesPubSub);
         yield* Effect.acquireRelease(retainHeadWatcher(cwd), () => releaseHeadWatcher(cwd));
         const branch = yield* refreshBranchStatusCore(cwd);
+        const initial = { refName: branch.refName, isRepo: branch.isRepo };
+        // Filter before merging: the pubsub is shared by every cwd and carries file lists.
+        const remoteTicks = Stream.fromSubscription(remoteChanges).pipe(
+          Stream.filter((change) => change.cwd === cwd && change.event._tag === "remoteUpdated"),
+          Stream.map(() => null),
+        );
         return Stream.concat(
-          Stream.make({ refName: branch.refName, isRepo: branch.isRepo }),
-          Stream.fromSubscription(subscription).pipe(
-            Stream.filter((event) => event.cwd === cwd && event.revision > branch.revision),
-            Stream.map(({ refName, isRepo }) => ({ refName, isRepo })),
+          Stream.make(initial),
+          Stream.merge(
+            Stream.fromSubscription(subscription).pipe(
+              Stream.filter((event) => event.cwd === cwd && event.revision > branch.revision),
+              Stream.map(({ refName, isRepo }) => ({ refName, isRepo })),
+            ),
+            remoteTicks,
           ),
         ).pipe(
+          Stream.mapAccumEffect(
+            () => initial,
+            (last, next) => {
+              const current = next ?? last;
+              return cachedDivergence(cwd, current.refName).pipe(
+                Effect.map((divergence) => [current, [{ ...current, ...divergence }]] as const),
+              );
+            },
+          ),
           Stream.changesWith(
-            (left, right) => left.refName === right.refName && left.isRepo === right.isRepo,
+            (left: VcsBranchStatus, right: VcsBranchStatus) =>
+              left.refName === right.refName &&
+              left.isRepo === right.isRepo &&
+              left.aheadCount === right.aheadCount &&
+              left.behindCount === right.behindCount,
           ),
         );
       }),

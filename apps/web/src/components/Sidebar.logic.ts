@@ -24,7 +24,9 @@ import {
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ThreadId,
+  type VcsBranchStatus,
 } from "@t3tools/contracts";
+import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/reactivity";
 import {
@@ -171,6 +173,44 @@ export function withoutRemovedCheckout<
   T extends { readonly branch: string | null; readonly worktreePath: string | null },
 >(thread: T, gitStatus: { readonly isRepo?: boolean | undefined } | null): T {
   return gitStatus?.isRepo === false ? { ...thread, branch: null, worktreePath: null } : thread;
+}
+
+// Local threads share the project checkout, so its counts would describe the checkout, not the thread.
+export function resolveSidebarBranchDivergence(
+  input: {
+    readonly status: VcsBranchStatus | null | undefined;
+    readonly branch: string | null;
+    readonly worktreePath: string | null;
+  },
+  resolve: MessageResolver = m,
+): { readonly label: string; readonly description: string } | null {
+  const { status, branch } = input;
+  if (input.worktreePath === null || !branch || status?.refName !== branch) return null;
+  const ahead = status.aheadCount ?? 0;
+  const behind = status.behindCount ?? 0;
+  if (ahead === 0 && behind === 0) return null;
+  const counts = { ahead: formatDiffCount(ahead), behind: formatDiffCount(behind) };
+  return {
+    label: [ahead > 0 && `↑${counts.ahead}`, behind > 0 && `↓${counts.behind}`]
+      .filter(Boolean)
+      .join(" "),
+    description: resolve(
+      ahead > 0 && behind > 0
+        ? msg(
+            "{count, plural, one {{ahead} commit ahead, {behind} behind upstream} other {{ahead} commits ahead, {behind} behind upstream}}",
+            { count: ahead, ...counts },
+          )
+        : ahead > 0
+          ? msg(
+              "{count, plural, one {{ahead} commit ahead of upstream} other {{ahead} commits ahead of upstream}}",
+              { count: ahead, ...counts },
+            )
+          : msg(
+              "{count, plural, one {{behind} commit behind upstream} other {{behind} commits behind upstream}}",
+              { count: behind, ...counts },
+            ),
+    ),
+  };
 }
 
 export function useRetainedValue<T>(key: string | null, value: T | null): T | null {
