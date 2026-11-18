@@ -1,4 +1,4 @@
-import { MessageId, RunId } from "@t3tools/contracts";
+import { MessageId, PlanId, RunId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import type { TimelineEntry } from "../../session-logic";
 import {
@@ -129,6 +129,17 @@ describe("citedThreadSnapshot", () => {
       title: "Could not load the cited response",
     });
   });
+
+  it("treats a cited proposed plan as an assistant source", () => {
+    expect(
+      citedThreadSnapshot({
+        ...unloaded,
+        thread: {
+          projection: { visibleTurnItems: [{ item: { type: "proposed_plan", id: "cited" } }] },
+        } as never,
+      }),
+    ).toEqual({ message: "assistant", hasMoreHistory: false });
+  });
 });
 
 describe("resolveCitationPhase", () => {
@@ -194,6 +205,30 @@ describe("resolveCitationPhase", () => {
       phase({
         entries: [sent],
         rows: [{ kind: "sent-message", id: messageId, createdAt: at, text: "Draft" }],
+      }),
+    ).toEqual({ _tag: "ready", rowId: messageId });
+  });
+
+  it("finds a proposed plan by its item id", () => {
+    const proposedPlan = {
+      id: PlanId.make("plan-1"),
+      runId,
+      planMarkdown: "# Plan",
+      status: "active",
+      createdAt: at,
+      updatedAt: at,
+    } as const;
+    const plan: TimelineEntry = {
+      kind: "proposed-plan",
+      id: messageId,
+      createdAt: at,
+      proposedPlan,
+    };
+    expect(phase({ entries: [plan] })).toEqual({ _tag: "expanding" });
+    expect(
+      phase({
+        entries: [plan],
+        rows: [{ kind: "proposed-plan", id: messageId, createdAt: at, proposedPlan }],
       }),
     ).toEqual({ _tag: "ready", rowId: messageId });
   });
