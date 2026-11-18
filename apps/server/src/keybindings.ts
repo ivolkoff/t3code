@@ -94,6 +94,15 @@ function isSameKeybindingRule(left: KeybindingRule, right: KeybindingRule): bool
   return keybindingRuleIdentity(left) === keybindingRuleIdentity(right);
 }
 
+// Official builds reject unknown commands in keybindings.json and then stop syncing defaults,
+// so fork-only defaults apply at runtime through mergeWithDefaultKeybindings and never reach the file.
+const RUNTIME_ONLY_DEFAULT_COMMANDS: ReadonlySet<KeybindingRule["command"]> = new Set([
+  "dashboard.open",
+]);
+const PERSISTED_DEFAULT_KEYBINDINGS = DEFAULT_KEYBINDINGS.filter(
+  (rule) => !RUNTIME_ONLY_DEFAULT_COMMANDS.has(rule.command),
+);
+
 const LATE_DEFAULT_KEYBINDINGS: ReadonlyArray<{
   readonly id: string;
   readonly alongside: KeybindingRule;
@@ -476,7 +485,7 @@ const make = Effect.gen(function* () {
       );
       const configExists = yield* readConfigExists;
       if (!configExists) {
-        yield* writeConfigAtomically(DEFAULT_KEYBINDINGS);
+        yield* writeConfigAtomically(PERSISTED_DEFAULT_KEYBINDINGS);
         if (pendingLateDefaults.length > 0) {
           yield* recordAppliedMigrations([
             ...appliedMigrationIds,
@@ -508,7 +517,7 @@ const make = Effect.gen(function* () {
         key: string;
         when: string | null;
       }> = [];
-      for (const defaultRule of DEFAULT_KEYBINDINGS) {
+      for (const defaultRule of PERSISTED_DEFAULT_KEYBINDINGS) {
         if (existingCommands.has(defaultRule.command)) {
           continue;
         }
@@ -545,7 +554,7 @@ const make = Effect.gen(function* () {
         });
       }
       if (missingDefaults.length > 0) {
-        const matchingDefaults = Array.filterMap(DEFAULT_KEYBINDINGS, (defaultRule) =>
+        const matchingDefaults = Array.filterMap(PERSISTED_DEFAULT_KEYBINDINGS, (defaultRule) =>
           customConfig.some((entry) => isSameKeybindingRule(entry, defaultRule))
             ? Result.succeed(defaultRule.command)
             : Result.failVoid,
@@ -665,6 +674,9 @@ const make = Effect.gen(function* () {
           const customConfig = yield* loadWritableCustomKeybindingsConfig();
           const rule = keybindingRuleFromInput(input);
           const replaceTarget = replaceTargetFromUpsertInput(input);
+          const isRuntimeOnlyDefault =
+            RUNTIME_ONLY_DEFAULT_COMMANDS.has(rule.command) &&
+            DEFAULT_KEYBINDINGS.some((defaultRule) => isSameKeybindingRule(defaultRule, rule));
           const nextConfig = [
             ...customConfig.filter(({ rule: entry }) => {
               if (!entry) return true;
@@ -675,7 +687,7 @@ const make = Effect.gen(function* () {
               }
               return !isSameKeybindingRule(entry, rule);
             }),
-            { value: rule, rule },
+            ...(isRuntimeOnlyDefault ? [] : [{ value: rule, rule }]),
           ];
           const cappedConfig =
             nextConfig.length > MAX_KEYBINDINGS_COUNT
