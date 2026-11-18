@@ -1,16 +1,20 @@
 import {
   MAX_SCRIPT_ID_LENGTH,
+  ProjectLucideIconName,
   SCRIPT_RUN_COMMAND_PATTERN,
   type KeybindingCommand,
   type ProjectScript,
+  type T3ProjectFileScript,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
+const isLucideIconName = Schema.is(ProjectLucideIconName);
 
 export interface ProjectScriptInput {
   readonly name: ProjectScript["name"];
   readonly command: ProjectScript["command"];
   readonly icon: ProjectScript["icon"];
+  readonly iconName?: ProjectScript["iconName"];
   readonly runOnWorktreeCreate: ProjectScript["runOnWorktreeCreate"];
   readonly waitForSetup: boolean;
   readonly runOnSettle: boolean;
@@ -25,6 +29,7 @@ export function buildProjectScript(id: string, input: ProjectScriptInput): Proje
     name: input.name,
     command: input.command,
     icon: input.icon,
+    ...(input.iconName ? { iconName: input.iconName } : {}),
     runOnWorktreeCreate: input.runOnWorktreeCreate,
     ...(input.runOnWorktreeCreate && input.waitForSetup ? { async: false } : {}),
     ...(input.runOnSettle ? { runOnSettle: true } : {}),
@@ -36,6 +41,22 @@ export function buildProjectScript(id: string, input: ProjectScriptInput): Proje
           autoOpenPreview: input.autoOpenPreview,
         }),
   };
+}
+
+export function projectScriptInputFromFile(script: T3ProjectFileScript) {
+  return {
+    name: script.name,
+    command: script.command,
+    icon: script.icon ?? "play",
+    // t3.json accepts any string so a typo cannot hide the whole file.
+    iconName: isLucideIconName(script.iconName) ? script.iconName : undefined,
+    runOnWorktreeCreate: script.runOnWorktreeCreate ?? false,
+    waitForSetup: script.runOnWorktreeCreate === true && script.async === false,
+    runOnSettle: script.runOnSettle ?? false,
+    stopOnSettle: script.stopOnSettle ?? false,
+    previewUrl: script.previewUrl ?? null,
+    autoOpenPreview: script.previewUrl ? (script.autoOpenPreview ?? false) : false,
+  } satisfies ProjectScriptInput;
 }
 
 export function releaseClaimedRoles(
