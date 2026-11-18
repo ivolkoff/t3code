@@ -5,7 +5,7 @@ import {
   type PreviewViewportSetting,
 } from "@t3tools/contracts";
 import { PREVIEW_VIEWPORT_PRESETS, resolvePreviewViewport } from "@t3tools/shared/previewViewport";
-import { Link2, Unlink2, X } from "lucide-react";
+import { Link2, Smartphone, Unlink2, X } from "lucide-react";
 import { useState } from "react";
 import { msg, T, useGT, useMessages } from "gt-react";
 
@@ -42,6 +42,8 @@ interface Props {
   readonly aspectRatio: number | null;
   readonly onAspectRatioChange: (aspectRatio: number | null) => void;
   readonly onChange: (setting: PreviewViewportSetting) => Promise<void>;
+  /** Only desktop tabs can emulate a preset's device. */
+  readonly canEmulateDevice?: boolean;
 }
 
 export function BrowserDeviceToolbar({
@@ -50,6 +52,7 @@ export function BrowserDeviceToolbar({
   aspectRatio,
   onAspectRatioChange,
   onChange,
+  canEmulateDevice = false,
 }: Props) {
   const gt = useGT();
   const m = useMessages();
@@ -151,7 +154,11 @@ export function BrowserDeviceToolbar({
     const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === value);
     if (!preset) return;
     apply(
-      resolvePreviewViewport({ mode: "preset", preset: preset.id }),
+      resolvePreviewViewport({
+        mode: "preset",
+        preset: preset.id,
+        ...(setting._tag === "preset" && setting.emulate === false ? { emulate: false } : {}),
+      }),
       aspectRatio === null ? null : preset.width / preset.height,
     );
   };
@@ -332,6 +339,32 @@ export function BrowserDeviceToolbar({
       >
         <ScreenRotationIcon />
       </Button>
+      {canEmulateDevice && setting._tag === "preset" ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant={setting.emulate === false ? "ghost" : "secondary"}
+                size="icon-xs"
+                type="button"
+                aria-label={gt("Emulate device")}
+                aria-pressed={setting.emulate !== false}
+                disabled={pending}
+                onClick={() => apply({ ...setting, emulate: setting.emulate === false })}
+              />
+            }
+          >
+            <Smartphone />
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            {setting.emulate === false ? (
+              <T>Emulate device: user agent, touch, pixel ratio</T>
+            ) : (
+              <T>Stop emulating device</T>
+            )}
+          </TooltipPopup>
+        </Tooltip>
+      ) : null}
       <span className="sticky right-0 ml-auto flex bg-background/95">
         <Button
           variant="ghost"
