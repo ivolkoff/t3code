@@ -15,6 +15,7 @@ import {
   ProjectCreatePayload,
   ProjectUpdatePayload,
   ProjectMutation,
+  ProjectScript,
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
@@ -168,6 +169,26 @@ describe("shared project payloads", () => {
     expect(
       decodeProjectMutation({ type: "project.update", ...envelope, title: undefined }),
     ).toHaveProperty("title", undefined);
+  });
+});
+
+describe("project scripts", () => {
+  const decodeScript = Schema.decodeUnknownSync(ProjectScript);
+  const base = { id: "dev", name: "Dev", command: "vp run dev", icon: "build" };
+
+  it("decodes scripts with and without a lucide icon name", () => {
+    expect(decodeScript({ ...base, runOnWorktreeCreate: false })).toEqual({
+      ...base,
+      runOnWorktreeCreate: false,
+    });
+    expect(decodeScript({ ...base, iconName: "rocket", runOnWorktreeCreate: false })).toEqual({
+      ...base,
+      iconName: "rocket",
+      runOnWorktreeCreate: false,
+    });
+    expect(() =>
+      decodeScript({ ...base, iconName: "Rocket", runOnWorktreeCreate: false }),
+    ).toThrow();
   });
 });
 

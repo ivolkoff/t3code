@@ -135,12 +135,12 @@ function setup() {
 
 describe("useProjectScriptSettings", () => {
   it.each(["project", "environment"] as const)(
-    "preserves the shortcut for %s action name and command edits",
+    "preserves the shortcut for %s action name, command, and icon edits",
     async (scope) => {
       setup();
       await using screen = await renderSettings(lintBinding, scope);
       const { submit } = screen.settings;
-      const changes = { name: "Lint and fix", command: "vp lint --fix" };
+      const changes = { name: "Lint and fix", command: "vp lint --fix", iconName: "rocket" };
 
       const result = await submitInAct(submit, changes);
 
