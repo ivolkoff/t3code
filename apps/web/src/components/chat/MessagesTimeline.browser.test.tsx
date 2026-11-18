@@ -8,6 +8,7 @@ import {
   EnvironmentId,
   MessageId,
   NodeId,
+  PlanId,
   ProviderDriverKind,
   ProviderInstanceId,
   RunAttemptId,
@@ -1208,7 +1209,84 @@ const CITATION_REQUEST = {
   },
 } satisfies NonNullable<TimelineProps["citationRequest"]>;
 
+function proposedPlan(planMarkdown: string): Entry {
+  return {
+    id: "cited",
+    kind: "proposed-plan",
+    createdAt: CREATED_AT,
+    proposedPlan: {
+      id: PlanId.make("plan-1"),
+      runId: null,
+      planMarkdown,
+      status: "active",
+      createdAt: CREATED_AT,
+      updatedAt: CREATED_AT,
+    },
+  };
+}
+
 describe("MessagesTimeline citations", () => {
+  it("offers Cite for a proposed plan", async () => {
+    await using screen = await renderTimeline(
+      [proposedPlan("# Clamp helper\n\n1. Add a clamp helper beside sum\n2. Test it")],
+      { onCiteAssistantText: () => true },
+    );
+    const step = screen.getByText("Add a clamp helper beside sum");
+    await expect.element(step).toHaveStyle({ pointerEvents: "auto" });
+    await userEvent.tripleClick(step);
+    await expect
+      .element(page.getByRole("button", { name: "Cite selection in composer" }))
+      .toBeVisible();
+  });
+
+  const quote = "Cited closing words";
+  const longPlan = `# Clamp helper\n\n${Array.from({ length: 25 }, (_, index) =>
+    index === 19 ? `20. ${quote}` : `${index + 1}. Plain step ${index + 1}`,
+  ).join("\n")}`;
+  const renderPlanCitation = (markdown: string) =>
+    renderTimeline([proposedPlan(markdown)], {
+      citationRequest: {
+        ...CITATION_REQUEST,
+        citation: { ...CITATION_REQUEST.citation, text: quote, end: quote.length },
+      },
+      citationHistory: { _tag: "found" },
+    });
+
+  it.each([
+    { name: "past the preview", markdown: longPlan },
+    {
+      name: "clipped inside the preview",
+      markdown: Array.from(
+        { length: 10 },
+        (_, index) =>
+          `Paragraph ${index + 1} ${"of filler words ".repeat(36)}${index === 9 ? quote : ""}`,
+      ).join("\n\n"),
+    },
+  ])("lands a citation $name of a collapsed proposed plan", async ({ markdown }) => {
+    await using _screen = await renderPlanCitation(markdown);
+    await expect.element(page.getByRole("button", { name: "Collapse plan" })).toBeVisible();
+    await vi.waitFor(() =>
+      expect(document.querySelector("[data-citation-highlighted]")?.textContent).toContain(quote),
+    );
+  });
+
+  it("keeps a proposed plan collapsed once its reader folds it after a citation", async () => {
+    await using screen = await renderPlanCitation(longPlan);
+    await vi.waitFor(() =>
+      expect(document.querySelector("[data-citation-highlighted]")?.textContent).toContain(quote),
+    );
+    await click(screen.button("Collapse plan"));
+    // Collapsing ends the activation; without that the next pass would reopen the plan.
+    await vi.waitFor(() =>
+      expect(
+        document
+          .getAnimations()
+          .some((animation) => animation.id === "t3-assistant-citation-pulse"),
+      ).toBe(false),
+    );
+    expect(screen.buttons("Expand plan")).toHaveLength(1);
+  });
+
   it("offers Cite for text an agent sent with send_to_user", async () => {
     const text = "The draft the next question refers to";
     await using screen = await renderTimeline(
