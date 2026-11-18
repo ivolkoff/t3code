@@ -15,7 +15,11 @@ import { projectScriptMenuLabel } from "@t3tools/shared/projectScripts";
 import { ChevronDownIcon, DownloadIcon, PlusIcon, SettingsIcon, WrenchIcon } from "lucide-react";
 import React, { useState } from "react";
 
-import { commandForProjectScript, primaryProjectScript } from "~/projectScripts";
+import {
+  commandForProjectScript,
+  primaryProjectScript,
+  projectScriptInputFromFile,
+} from "~/projectScripts";
 import { shortcutLabelForCommand } from "~/keybindings";
 import { serverEnvironment } from "~/state/server";
 import { readEnvironmentScope } from "~/state/session";
@@ -131,16 +135,8 @@ export default function ProjectScriptsControl({
 
   const importFileScript = async (fileScript: T3ProjectFileScript) => {
     const payload: NewProjectScriptInput = {
-      name: fileScript.name,
-      command: fileScript.command,
-      icon: fileScript.icon ?? "play",
-      runOnWorktreeCreate: fileScript.runOnWorktreeCreate ?? false,
-      waitForSetup: fileScript.runOnWorktreeCreate === true && fileScript.async === false,
-      runOnSettle: fileScript.runOnSettle ?? false,
-      stopOnSettle: fileScript.stopOnSettle ?? false,
+      ...projectScriptInputFromFile(fileScript),
       ...(readEnvironmentScope(environmentId, AuthSettingsWriteScope) ? { keybinding: null } : {}),
-      previewUrl: fileScript.previewUrl ?? null,
-      autoOpenPreview: fileScript.previewUrl ? (fileScript.autoOpenPreview ?? false) : false,
     };
     const result = await onAddScript(payload);
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
@@ -164,7 +160,11 @@ export default function ProjectScriptsControl({
             key={`${fileScript.name} ${fileScript.command}`}
             onClick={() => void importFileScript(fileScript)}
           >
-            <ScriptIcon icon={fileScript.icon ?? "play"} className="size-4" />
+            <ScriptIcon
+              icon={fileScript.icon ?? "play"}
+              iconName={fileScript.iconName}
+              className="size-4"
+            />
             <MenuItemLabel>{fileScript.name}</MenuItemLabel>
             <MenuShortcut>
               <DownloadIcon className="size-3.5" aria-label="Import" />
@@ -190,7 +190,7 @@ export default function ProjectScriptsControl({
             disabled={!onRunScript}
             onClick={() => onRunScript?.(script)}
           >
-            <ScriptIcon icon={script.icon} className="size-4" />
+            <ScriptIcon icon={script.icon} iconName={script.iconName} className="size-4" />
             <MenuItemLabel>{projectScriptMenuLabel(script)}</MenuItemLabel>
             <span className="relative ms-auto flex h-6 min-w-6 items-center justify-end">
               {shortcutLabel &&
@@ -245,7 +245,11 @@ export default function ProjectScriptsControl({
               disabled={!onRunScript}
               onClick={() => onRunScript?.(primaryScript)}
             >
-              <ScriptIcon icon={primaryScript.icon} className="size-4" />
+              <ScriptIcon
+                icon={primaryScript.icon}
+                iconName={primaryScript.iconName}
+                className="size-4"
+              />
               <MenuItemLabel>Run {primaryScript.name}</MenuItemLabel>
               <MenuShortcut>
                 {shortcutLabelForCommand(keybindings, commandForProjectScript(primaryScript.id))}
@@ -302,6 +306,7 @@ export default function ProjectScriptsControl({
             >
               <ScriptIcon
                 icon={primaryScript.icon}
+                iconName={primaryScript.iconName}
                 {...(isPanel ? { className: THREAD_DETAILS_PANEL_ICON_CLASS } : {})}
               />
               <span

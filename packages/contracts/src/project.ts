@@ -32,11 +32,18 @@ export const ProjectScriptIcon = Schema.Literals([
 ]);
 export type ProjectScriptIcon = typeof ProjectScriptIcon.Type;
 
+export const ProjectLucideIconName = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(64),
+  Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+);
+
 export const ProjectScript = Schema.Struct({
   id: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
   command: TrimmedNonEmptyString,
   icon: ProjectScriptIcon,
+  // Clients without lucide lookup keep rendering `icon`.
+  iconName: Schema.optional(ProjectLucideIconName),
   runOnWorktreeCreate: Schema.Boolean,
   runOnSettle: Schema.optional(Schema.Boolean),
   stopOnSettle: Schema.optional(Schema.Boolean),
@@ -67,11 +74,6 @@ export const ProjectIconColor = Schema.Literals([
   "rose",
 ]);
 export type ProjectIconColor = typeof ProjectIconColor.Type;
-
-const ProjectLucideIconName = TrimmedNonEmptyString.check(
-  Schema.isMaxLength(64),
-  Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-);
 
 const ProjectEmoji = TrimmedNonEmptyString.check(Schema.isMaxLength(32));
 

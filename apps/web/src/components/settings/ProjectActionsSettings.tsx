@@ -10,6 +10,7 @@ import { ChevronDownIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { useT3ProjectFileState } from "../../hooks/useT3ProjectFileScripts";
 import { useEnvironments } from "../../state/environments";
+import { projectScriptInputFromFile } from "../../projectScripts";
 import {
   EMPTY_PROJECT_SCRIPT_INPUT,
   editorRequestForScript,
@@ -85,16 +86,8 @@ export function ProjectActionsSettings() {
   );
   const importFileScript = async (fileScript: T3ProjectFileScript) => {
     const payload: NewProjectScriptInput = {
-      name: fileScript.name,
-      command: fileScript.command,
-      icon: fileScript.icon ?? "play",
-      runOnWorktreeCreate: fileScript.runOnWorktreeCreate ?? false,
-      waitForSetup: fileScript.runOnWorktreeCreate === true && fileScript.async === false,
-      runOnSettle: fileScript.runOnSettle ?? false,
-      stopOnSettle: fileScript.stopOnSettle ?? false,
+      ...projectScriptInputFromFile(fileScript),
       keybinding: null,
-      previewUrl: fileScript.previewUrl ?? null,
-      autoOpenPreview: fileScript.previewUrl ? (fileScript.autoOpenPreview ?? false) : false,
     };
     const result = await submit(null, payload);
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
@@ -147,7 +140,11 @@ export function ProjectActionsSettings() {
                       key={`${fileScript.name} ${fileScript.command}`}
                       onClick={() => void importFileScript(fileScript)}
                     >
-                      <ScriptIcon icon={fileScript.icon ?? "play"} className="size-4 shrink-0" />
+                      <ScriptIcon
+                        icon={fileScript.icon ?? "play"}
+                        iconName={fileScript.iconName}
+                        className="size-4 shrink-0"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">{fileScript.name}</div>
                         <div className="truncate font-mono text-muted-foreground">

@@ -13,6 +13,7 @@ vi.mock(import("~/state/session"), async (original) => ({
 import {
   EMPTY_PROJECT_SCRIPT_INPUT,
   ProjectScriptEditorDialog,
+  ScriptIcon,
   type ProjectScriptActionResult,
   type ProjectScriptEditorRequest,
 } from "./projectScriptEditor";
@@ -84,5 +85,26 @@ describe("project action editor save lifecycle", () => {
     await act(async () => second.resolve(AsyncResult.success(undefined)));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls.map(([scriptId]) => scriptId)).toEqual(["build", "test"]);
+  });
+});
+
+describe("ScriptIcon", () => {
+  it("draws a known lucide name and falls back to the built-in icon for an unknown one", async () => {
+    await using _screen = await render(
+      <>
+        <span data-testid="known">
+          <ScriptIcon icon="test" iconName="rocket" />
+        </span>
+        <span data-testid="unknown">
+          <ScriptIcon icon="test" iconName="not-a-lucide-icon" />
+        </span>
+      </>,
+    );
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-testid="known"] svg.lucide-rocket')).not.toBeNull(),
+    );
+    expect(
+      document.querySelector('[data-testid="unknown"] svg.lucide-flask-conical'),
+    ).not.toBeNull();
   });
 });
