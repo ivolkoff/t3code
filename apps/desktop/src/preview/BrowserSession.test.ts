@@ -731,7 +731,7 @@ describe("BrowserSession", () => {
     }).pipe(Effect.scoped, Effect.provide(Layer.merge(layer, NodeServices.layer))),
   );
 
-  it.effect("adds Chrome Client Hints to secure requests that lack them", () => {
+  it.effect("adds Chrome Client Hints to secure requests and a device's to its guest", () => {
     const layerChrome = BrowserSession.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
@@ -753,9 +753,13 @@ describe("BrowserSession", () => {
       yield* browserSessions.getSession("scope-a");
       const [listener] =
         sessions.get(partition)?.webRequest.onBeforeSendHeaders.mock.calls[0] ?? [];
-      const send = (url: string, requestHeaders: Record<string, string>) => {
+      const send = (
+        url: string,
+        requestHeaders: Record<string, string>,
+        webContentsId?: number,
+      ) => {
         let response: { requestHeaders?: Record<string, string> } | undefined;
-        listener({ url, requestHeaders }, (next: typeof response) => {
+        listener({ url, requestHeaders, webContentsId }, (next: typeof response) => {
           response = next;
         });
         return response;
@@ -767,6 +771,19 @@ describe("BrowserSession", () => {
       });
       assert.deepStrictEqual(send("https://example.com/", { "Sec-CH-UA": "kept" }), {});
       assert.deepStrictEqual(send("http://example.com/", { Accept: "*/*" }), {});
+
+      yield* browserSessions.emulateDevice(42, "iphone-14-pro-max");
+      const emulated = send(
+        "https://example.com/",
+        { "User-Agent": "desktop", "Sec-CH-UA-Mobile": "?0" },
+        42,
+      )?.requestHeaders;
+      assert.include(emulated?.["User-Agent"], "iPhone");
+      assert.strictEqual(emulated?.["Sec-CH-UA-Mobile"], "?1");
+      assert.strictEqual(emulated?.["sec-ch-ua-platform"], '"iOS"');
+      assert.deepStrictEqual(send("https://example.com/", { "Sec-CH-UA": "kept" }, 7), {});
+      yield* browserSessions.emulateDevice(42, null);
+      assert.deepStrictEqual(send("https://example.com/", { "Sec-CH-UA": "kept" }, 42), {});
     }).pipe(
       Effect.provide(layerChrome),
       Effect.ensuring(

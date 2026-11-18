@@ -21,8 +21,10 @@ import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import {
   clientHintHeaders,
+  type PreviewDeviceEmulation,
   type PreviewUserAgentMetadata,
   type PreviewUserAgentSettings,
+  resolvePreviewDeviceEmulation,
   resolvePreviewUserAgent,
   resolvePreviewUserAgentMetadata,
 } from "./previewUserAgent.ts";
@@ -243,6 +245,11 @@ export class BrowserSession extends Context.Service<
       readonly userAgent: string;
       readonly metadata: PreviewUserAgentMetadata;
     } | null>;
+    /** Requests from this guest carry the preset device's identity until it is set to null. */
+    readonly emulateDevice: (
+      webContentsId: number,
+      presetId: string | null,
+    ) => Effect.Effect<PreviewDeviceEmulation | null>;
   }
 >()("@t3tools/desktop/preview/BrowserSession") {}
 
@@ -592,6 +599,7 @@ export const make = Effect.gen(function* BrowserSessionMake() {
     onSome: (settings) => resolvePreviewUserAgentMetadata(settings, engine),
   });
   const nativeUserAgents = new WeakMap<Session, string>();
+  const deviceEmulations = new Map<number, PreviewDeviceEmulation>();
   const applyUserAgent = (browserSession: Session): void => {
     const userAgent = userAgentOverride || nativeUserAgents.get(browserSession);
     if (userAgent === undefined) return;
@@ -691,27 +699,41 @@ export const make = Effect.gen(function* BrowserSessionMake() {
               ? clipboardReadDecisions.get(permissionOrigin(requestingOrigin) ?? "") === true
               : ALLOWED_PREVIEW_PERMISSIONS.has(permission),
           );
-          browserSession.webRequest.onBeforeSendHeaders(({ url, requestHeaders }, callback) => {
-            const headers = { ...requestHeaders };
-            const headerName = (wanted: string) =>
-              Object.keys(headers).find((name) => name.toLowerCase() === wanted);
-            let changed = false;
-            const userAgentHeader = headerName("user-agent");
-            if (userAgentHeader !== undefined && isTeamsUrl(url)) {
-              headers[userAgentHeader] = headers[userAgentHeader]!.replace(/ Electron\/\S+/, "");
-              changed = true;
-            }
-            // Navigations take the session User-Agent, which carries no Client Hints.
-            if (
-              userAgentMetadata !== null &&
-              url.startsWith("https://") &&
-              headerName("sec-ch-ua") === undefined
-            ) {
-              Object.assign(headers, clientHintHeaders(userAgentMetadata));
-              changed = true;
-            }
-            callback(changed ? { requestHeaders: headers } : {});
-          });
+          browserSession.webRequest.onBeforeSendHeaders(
+            ({ url, requestHeaders, webContentsId }, callback) => {
+              const headers = { ...requestHeaders };
+              const headerName = (wanted: string) =>
+                Object.keys(headers).find((name) => name.toLowerCase() === wanted);
+              let changed = false;
+              const userAgentHeader = headerName("user-agent");
+              if (userAgentHeader !== undefined && isTeamsUrl(url)) {
+                headers[userAgentHeader] = headers[userAgentHeader]!.replace(/ Electron\/\S+/, "");
+                changed = true;
+              }
+              // Navigations take the session User-Agent, which carries no Client Hints.
+              if (
+                userAgentMetadata !== null &&
+                url.startsWith("https://") &&
+                headerName("sec-ch-ua") === undefined
+              ) {
+                Object.assign(headers, clientHintHeaders(userAgentMetadata));
+                changed = true;
+              }
+              // Electron adds no Client Hints to navigations, and the guest's emulation reaches only its own requests.
+              const device =
+                webContentsId === undefined ? undefined : deviceEmulations.get(webContentsId);
+              if (device !== undefined) {
+                headers[headerName("user-agent") ?? "User-Agent"] = device.userAgent;
+                if (url.startsWith("https://")) {
+                  for (const [name, value] of Object.entries(clientHintHeaders(device.metadata))) {
+                    headers[headerName(name) ?? name] = value;
+                  }
+                }
+                changed = true;
+              }
+              callback(changed ? { requestHeaders: headers } : {});
+            },
+          );
           return browserSession;
         },
         catch: (cause) =>
@@ -798,6 +820,12 @@ export const make = Effect.gen(function* BrowserSessionMake() {
         ? null
         : { userAgent: userAgentOverride, metadata: userAgentMetadata },
     ),
+    emulateDevice: Effect.fn("BrowserSession.emulateDevice")(function* (webContentsId, presetId) {
+      const emulation = resolvePreviewDeviceEmulation(presetId, engine);
+      if (emulation === null) deviceEmulations.delete(webContentsId);
+      else deviceEmulations.set(webContentsId, emulation);
+      return emulation;
+    }),
     setUserAgent: Effect.fn("BrowserSession.setUserAgent")(function* (settings) {
       userAgentMetadata = resolvePreviewUserAgentMetadata(settings, engine);
       const next = resolvePreviewUserAgent(settings, engine);

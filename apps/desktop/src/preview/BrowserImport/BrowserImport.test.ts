@@ -37,6 +37,7 @@ const layerRejectedBeforeSession = Layer.succeed(
     clearCache: () => Effect.die("clearCache must not be reached"),
     setUserAgent: () => Effect.die("setUserAgent must not be reached"),
     userAgentMetadata: Effect.succeed(null),
+    emulateDevice: () => Effect.succeed(null),
   }),
 );
 

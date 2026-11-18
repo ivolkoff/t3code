@@ -33,6 +33,7 @@ import * as BrowserSession from "./BrowserSession.ts";
 import * as DesktopBrowserHost from "./DesktopBrowserHost.ts";
 import * as PreviewManager from "./Manager.ts";
 import * as PreviewPasskeys from "./Passkeys.ts";
+import { resolvePreviewDeviceEmulation } from "./previewUserAgent.ts";
 
 describe("fitPictureInPictureContentSize", () => {
   it("does not collapse toward the minimum size when orientation changes repeatedly", () => {
@@ -209,6 +210,15 @@ const layerBrowserSession = Layer.succeed(
     clearCache: () => Effect.void,
     setUserAgent: () => Effect.void,
     userAgentMetadata: Effect.succeed(null),
+    emulateDevice: (_webContentsId, presetId) =>
+      Effect.succeed(
+        resolvePreviewDeviceEmulation(presetId, {
+          chromeVersion: "152.0.7977.169",
+          platform: "darwin",
+          arch: "arm64",
+          systemVersion: "27.2.1",
+        }),
+      ),
   }),
 );
 
@@ -1375,6 +1385,60 @@ describe("PreviewManager", () => {
 
         expect(debuggerOff).toHaveBeenCalledWith("message", expect.any(Function));
         expect(debuggerDetach).toHaveBeenCalledOnce();
+      }),
+    ),
+  );
+
+  effectIt.effect("emulates a preset's device and restores the desktop identity", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const wc = Object.assign(
+          makeTestPreviewWebContents(async () => makeStillImage()),
+          { reload: vi.fn(), isDevToolsOpened: () => false },
+        );
+        fromId.mockReturnValue(wc);
+        yield* manager.createTab("tab_device");
+        yield* manager.registerWebview("tab_device", wc.id);
+        const sendCommand = vi.mocked(wc.debugger.sendCommand);
+
+        yield* manager.setDevice("tab_device", {
+          presetId: "iphone-14-pro-max",
+          width: 430,
+          height: 932,
+        });
+        expect(sendCommand).toHaveBeenCalledWith(
+          "Emulation.setDeviceMetricsOverride",
+          expect.objectContaining({ deviceScaleFactor: 3, mobile: true, screenWidth: 430 }),
+        );
+        expect(sendCommand).toHaveBeenCalledWith("Emulation.setTouchEmulationEnabled", {
+          enabled: true,
+          maxTouchPoints: 5,
+        });
+        expect(sendCommand).toHaveBeenCalledWith(
+          "Emulation.setUserAgentOverride",
+          expect.objectContaining({
+            userAgent: expect.stringContaining("iPhone"),
+            userAgentMetadata: expect.objectContaining({ mobile: true }),
+          }),
+        );
+        // Rotation keeps the identity, so it does not reload again.
+        yield* manager.setDevice("tab_device", {
+          presetId: "iphone-14-pro-max",
+          width: 932,
+          height: 430,
+        });
+        expect(wc.reload).toHaveBeenCalledOnce();
+
+        sendCommand.mockClear();
+        yield* manager.setDevice("tab_device", null);
+        expect(sendCommand).toHaveBeenCalledWith("Emulation.clearDeviceMetricsOverride", {});
+        expect(sendCommand).toHaveBeenCalledWith("Emulation.setTouchEmulationEnabled", {
+          enabled: false,
+        });
+        expect(sendCommand).toHaveBeenCalledWith("Emulation.setUserAgentOverride", {
+          userAgent: "",
+        });
+        expect(wc.reload).toHaveBeenCalledTimes(2);
       }),
     ),
   );
