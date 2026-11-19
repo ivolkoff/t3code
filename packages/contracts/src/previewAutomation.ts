@@ -232,6 +232,7 @@ export const PreviewAutomationResizeInput = Schema.Struct({
   width: Schema.optional(PreviewViewportSize.fields.width),
   height: Schema.optional(PreviewViewportSize.fields.height),
   orientation: Schema.optional(Schema.Literals(["portrait", "landscape"])),
+  emulate: Schema.optional(Schema.Boolean),
   timeoutMs: OptionalTimeoutMs,
 }).check(
   Schema.makeFilter((input) => {
@@ -239,6 +240,9 @@ export const PreviewAutomationResizeInput = Schema.Struct({
     const hasWidth = input.width !== undefined;
     const hasHeight = input.height !== undefined;
     if (hasWidth !== hasHeight) return "Custom dimensions require both width and height.";
+    if (input.mode !== "preset" && input.emulate !== undefined) {
+      return "Only preset mode accepts emulate.";
+    }
     if (input.mode === "fill") {
       return !hasPreset && !hasWidth && input.orientation === undefined
         ? true
