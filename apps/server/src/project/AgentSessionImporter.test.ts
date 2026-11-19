@@ -239,7 +239,35 @@ const makeImporter = Effect.fn(function* (
           ),
           realScan === undefined
             ? Layer.mock(AgentSessionScanner.AgentSessionScanner)({
-                recentThreads: () => Stream.fromIterable(candidates),
+                recentThreads: (_root, _completed, only) =>
+                  Stream.fromIterable(
+                    candidates.filter(
+                      (outcome) =>
+                        only === undefined ||
+                        (outcome._tag !== "Skipped" &&
+                          outcome.source.providerInstanceId === only.providerInstanceId &&
+                          outcome.source.filePath === only.filePath),
+                    ),
+                  ),
+                projectSessions: () =>
+                  Effect.succeed({
+                    truncated: false,
+                    entries: candidates.flatMap((outcome) =>
+                      outcome._tag === "Importable"
+                        ? [
+                            {
+                              ...outcome.source,
+                              ...("listedAs" in outcome
+                                ? { providerSessionId: String(outcome.listedAs) }
+                                : {}),
+                              title: outcome.thread.title,
+                              lastActiveAt: timestamp,
+                              branch: null,
+                            },
+                          ]
+                        : [],
+                    ),
+                  }),
               })
             : Layer.succeed(AgentSessionScanner.AgentSessionScanner, realScan.scanner),
           Layer.mock(ProjectService.ProjectService)({
@@ -280,6 +308,13 @@ const makeImporter = Effect.fn(function* (
   return {
     run: importer.importRecentAgentThreads({ projectId }),
     importNativeHistory: importer.importNativeHistory,
+    list: importer.listSessions({ projectId }),
+    importOne: (source: ReturnType<typeof candidate>) =>
+      importer.importSession({
+        projectId,
+        providerInstanceId: source.source.providerInstanceId,
+        providerSessionId: source.source.providerSessionId,
+      }),
     published,
   };
 });
@@ -385,6 +420,88 @@ it.effect(
         });
       }
     }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("imports one listed session alone and opens its thread on a repeat", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+    const picked = candidate(
+      CLAUDE_MODEL_SELECTION,
+      "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "claudeAgent",
+    );
+    const other = candidate(CODEX_MODEL_SELECTION, "not-picked");
+    // The full read can name the session differently from the listed prefix.
+    const renamed = {
+      ...candidate(CODEX_MODEL_SELECTION, "full-read-name"),
+      listedAs: "listed-name",
+    };
+    const importer = yield* makeImporter([picked, other, renamed]);
+    const threadId = importId(picked);
+
+    expect(yield* importer.importOne(picked)).toEqual({ threadId, imported: true });
+    expect(
+      new Set(
+        importer.published.flatMap((stored) => ("event" in stored ? [stored.event.threadId] : [])),
+      ),
+    ).toEqual(new Set([threadId]));
+    const records = yield* projections.getThreadRecords(threadId, ["messages", "providerThreads"]);
+    expect(records.messages.map((message) => message.text)).toEqual(["Fix it", "Fixed"]);
+    expect(records.providerThreads[0]?.nativeThreadRef?.nativeId).toBe(
+      picked.source.providerSessionId,
+    );
+    expect(Option.getOrThrow(yield* runtimes.getByThreadId({ threadId })).resumeCursor).toEqual({
+      threadId,
+      resume: picked.source.providerSessionId,
+    });
+
+    const published = importer.published.length;
+    expect(yield* importer.importOne(picked)).toEqual({ threadId, imported: false });
+    expect(importer.published).toHaveLength(published);
+    expect((yield* importer.list).sessions).toMatchObject([
+      { providerSessionId: picked.source.providerSessionId, threadId, threadDeleted: false },
+      { providerSessionId: "not-picked", threadId: null, threadDeleted: false },
+      { providerSessionId: "listed-name", threadId: null, threadDeleted: false },
+    ]);
+
+    const listedRenamed = {
+      ...renamed,
+      source: { ...renamed.source, providerSessionId: "listed-name" },
+    };
+    expect(yield* importer.importOne(listedRenamed)).toEqual({
+      threadId: importId(renamed),
+      imported: true,
+    });
+    expect(yield* importer.importOne(listedRenamed)).toEqual({
+      threadId: importId(renamed),
+      imported: false,
+    });
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("opens a session's live owner and refuses deleted owners and unknown sessions", () =>
+  Effect.gen(function* () {
+    const live = candidate(CODEX_MODEL_SELECTION, "owned-live");
+    const deleted = candidate(CODEX_MODEL_SELECTION, "owned-deleted");
+    const liveOwner = yield* seedOwner(live);
+    const deletedOwner = yield* seedOwner(deleted, "deleted");
+    const importer = yield* makeImporter([live, deleted]);
+
+    expect((yield* importer.list).sessions).toMatchObject([
+      { providerSessionId: "owned-live", threadId: liveOwner, threadDeleted: false },
+      { providerSessionId: "owned-deleted", threadId: deletedOwner, threadDeleted: true },
+    ]);
+    expect(yield* importer.importOne(live)).toEqual({ threadId: liveOwner, imported: false });
+    expect(yield* Effect.flip(importer.importOne(deleted))).toMatchObject({
+      _tag: "AgentSessionThreadDeletedError",
+      threadId: deletedOwner,
+    });
+    expect(
+      yield* Effect.flip(importer.importOne(candidate(CODEX_MODEL_SELECTION, "unknown"))),
+    ).toMatchObject({ _tag: "AgentSessionNotFoundError", providerSessionId: "unknown" });
+    expect(importer.published).toEqual([]);
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
 );
 
 it.effect("tolerates a missing transcript owner but propagates failed ownership reads", () =>
