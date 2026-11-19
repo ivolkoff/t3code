@@ -460,6 +460,32 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["usage quota rate limit reset recover continue"],
   },
   {
+    id: "pace-hold",
+    title: "Pause background work ahead of pace",
+    to: "/settings/threads",
+    searchTerms: ["usage quota rate limit pace budget weekly hold delegated scheduled background"],
+  },
+  {
+    id: "pace-hold-ahead",
+    title: "Points ahead of pace before pausing",
+    to: "/settings/threads",
+    targetId: "pace-hold",
+    searchTerms: ["usage pace threshold percent"],
+  },
+  {
+    id: "pace-hold-resume-slack",
+    title: "Points ahead of pace when resuming",
+    to: "/settings/threads",
+    targetId: "pace-hold",
+    searchTerms: ["usage pace slack margin resume percent"],
+  },
+  {
+    id: "pace-hold-tags",
+    title: "Pace limits by tag",
+    to: "/settings/threads",
+    searchTerms: ["usage pace threshold tag critical background review percent"],
+  },
+  {
     id: "working-shelf",
     title: msg("Working section"),
     to: "/settings/general",

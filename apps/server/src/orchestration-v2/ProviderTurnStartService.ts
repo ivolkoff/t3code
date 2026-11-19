@@ -1,4 +1,5 @@
 import { modelSelectionsEqual } from "@t3tools/shared/model";
+import { paceHoldUntil } from "@t3tools/shared/usageLimits";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import {
   CommandId,
@@ -15,6 +16,7 @@ import {
   RunId,
   RunAttemptId,
   NodeId,
+  type ServerSettings as ServerSettingsValue,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -37,6 +39,7 @@ import { withTurnStartReservation, withWorkspaceLease } from "../workspace/works
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { makeRestoreMissingWorktree } from "../workspace/restoreMissingWorktree.ts";
 import * as EventSink from "./EventSink.ts";
@@ -145,6 +148,24 @@ const startFailureMessage = (error: Error): string => {
   );
 };
 
+// `critical` threads run unless `critical` itself has a threshold.
+const paceHoldAheadPercentFor = (
+  tags: ReadonlySet<string>,
+  settings: Pick<ServerSettingsValue, "paceHoldAheadPercent" | "paceHoldTagThresholds">,
+): number | null => {
+  const tagged = settings.paceHoldTagThresholds.filter((entry) =>
+    tags.has(entry.tag.trim().toLowerCase()),
+  );
+  if (
+    tags.has("critical") &&
+    !tagged.some((entry) => entry.tag.trim().toLowerCase() === "critical")
+  )
+    return null;
+  return tagged.length > 0
+    ? Math.min(...tagged.map((entry) => entry.aheadPercent))
+    : settings.paceHoldAheadPercent;
+};
+
 export interface ProviderTurnStartServiceV2Shape {
   readonly start: (input: {
     readonly threadId: ThreadId;
@@ -177,6 +198,7 @@ export const layer: Layer.Layer<
   | GitWorkflowService.GitWorkflowService
   | ProjectService.ProjectService
   | ProviderAuthService.ProviderAuthService
+  | ProviderInstanceRegistry.ProviderInstanceRegistry
   | ProjectionStore.ProjectionStoreV2
   | ProviderSessionManager.ProviderSessionManagerV2
   | RunExecutionService.RunExecutionServiceV2
@@ -193,6 +215,8 @@ export const layer: Layer.Layer<
     const path = yield* Path.Path;
     const projects = yield* ProjectService.ProjectService;
     const providerAuth = yield* ProviderAuthService.ProviderAuthService;
+    const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
@@ -552,6 +576,53 @@ export const layer: Layer.Layer<
           });
         },
       );
+      const tags = new Set((projection.thread.tags ?? []).map((tag) => tag.toLowerCase()));
+      // Notifications and delegated completions cannot be re-sent later, so they are never held.
+      const holdable =
+        message.notification === undefined &&
+        message.delegatedCompletion === undefined &&
+        (message.createdBy !== "user" ||
+          message.scheduledTaskId !== undefined ||
+          tags.has("background"));
+      const pace = holdable ? yield* serverSettings.getSettings.pipe(Effect.option) : Option.none();
+      const aheadPercent = Option.isSome(pace) ? paceHoldAheadPercentFor(tags, pace.value) : null;
+      if (Option.isSome(pace) && aheadPercent !== null) {
+        const instance = yield* providerInstances.getInstance(run.providerInstanceId);
+        const now = yield* DateTime.now;
+        const wakeAt =
+          instance === undefined
+            ? null
+            : paceHoldUntil(
+                (yield* instance.snapshot.getSnapshot).usageLimits?.windows ?? [],
+                DateTime.toEpochMillis(now),
+                aheadPercent,
+                pace.value.paceHoldResumeSlackPercent,
+              );
+        if (wakeAt !== null) {
+          yield* settleRunBeforeStart({
+            run,
+            rootNode,
+            attempt,
+            turnItems: projection.turnItems,
+            signal: "pace-hold",
+            status: "failed",
+            now,
+            providerInstanceId: run.providerInstanceId,
+            itemProviderThreadId: providerThread.id,
+            item: {
+              type: "error",
+              title: "Paused while ahead of usage pace",
+              failure: makeProviderFailure({
+                class: "usage_limit",
+                code: "pace_hold",
+                message: "Ahead of usage pace",
+                resetAt: DateTime.formatIso(DateTime.makeUnsafe(wakeAt)),
+              }),
+            },
+          });
+          return;
+        }
+      }
       if (
         providerMessage.attachments.length === 0 &&
         providerMessage.text.trimStart().startsWith("/")
