@@ -440,7 +440,11 @@ export function useThreadActions() {
 
   const deleteThread = async (
     target: ScopedThreadRef,
-    opts: { deletedThreadKeys?: ReadonlySet<string> } = {},
+    opts: {
+      deletedThreadKeys?: ReadonlySet<string>;
+      /** False keeps an orphaned worktree unasked, so a bulk delete confirms only once. */
+      askAboutWorktree?: boolean;
+    } = {},
   ) => {
     const permissionFailure = threadOperationFailure(target);
     if (permissionFailure) return permissionFailure;
@@ -558,7 +562,12 @@ export function useThreadActions() {
     const automaticWorktreeCleanup = environmentSettings
       ? resolveWorktreeCleanup(environmentSettings, thread.projectId).worktreeOnDelete
       : false;
-    if (canDeleteWorktree && localApi && !automaticWorktreeCleanup) {
+    if (
+      canDeleteWorktree &&
+      localApi &&
+      !automaticWorktreeCleanup &&
+      opts.askAboutWorktree !== false
+    ) {
       const confirmationResult = await settlePromise(() =>
         localApi.dialogs.confirm(
           [

@@ -202,6 +202,11 @@ choose **Auto-settle behavior**, and pick **Never**. The current option is check
 a thread on **Follow settings** does not settle automatically either. Manual settle, snooze, and
 archive still work while it is set to **Never**.
 
+**Settings → Archived threads** lists archived threads by project. On web and desktop,
+**Delete all** next to a project deletes its archived threads, and **Delete all archived
+threads** deletes every archived thread in the selected scope. Both ask once and cannot be undone;
+their worktrees stay unless worktree cleanup on delete is on.
+
 Change these rules in **Settings → Threads**.
 They continue to run when your apps are closed. On web and desktop, choose an environment at the
 top to change only its rules, or **All environments** to update connected environments together.
