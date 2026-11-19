@@ -65,6 +65,7 @@ import { scopedIdleCompaction } from "./scopedSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
+import { ThreadTagsSection } from "./ThreadTagsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import {
@@ -1022,7 +1023,12 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...setting("project-order")}
-          description={<T>Order of projects in the sidebar project picker and command palette. Set a manual order by dragging projects in Settings → Projects.</T>}
+          description={
+            <T>
+              Order of projects in the sidebar project picker and command palette. Set a manual
+              order by dragging projects in Settings → Projects.
+            </T>
+          }
           resetAction={
             settings.sidebarProjectSortOrder !==
             DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder ? (
@@ -2006,6 +2012,8 @@ export function ThreadsSettingsPanel() {
           <SnoozePresetsRow />
         </SettingsSection>
       ) : null}
+
+      {!isProjectScope ? <ThreadTagsSection /> : null}
 
       <SettingsSection id="usage-limits" title="Usage limits">
         <SettingsRow

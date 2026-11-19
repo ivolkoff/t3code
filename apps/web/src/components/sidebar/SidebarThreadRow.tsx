@@ -1,5 +1,7 @@
-import { useAtomMount } from "@effect/atom-react";
+import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
+import { sortThreadTags } from "@t3tools/client-runtime/state/threadTagStyles";
+import { ThreadTagChips } from "../ThreadTagChips";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -48,6 +50,7 @@ import {
   CircleDotDashedIcon,
   ClockIcon,
   GitBranchIcon,
+  TagIcon,
   MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
@@ -76,6 +79,7 @@ import { useNowMinute } from "../../hooks/useNowMinute";
 import { useNowSecond } from "../../hooks/useNowSecond";
 import { vcsEnvironment, vcsBranchRevalidation } from "../../state/vcs";
 import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import type { SidebarThreadSummary } from "../../types";
@@ -272,6 +276,7 @@ function SidebarThreadTooltip({
     .filter((instanceId) => instanceId !== modelInstanceId)
     .map((instanceId) => providerEntryByInstanceId.get(instanceId)?.displayName ?? instanceId);
   const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
+  const tagStyles = useAtomValue(serverEnvironment.threadTagStylesAtom(thread.environmentId));
   return (
     <ThreadHoverCardPopup side="right" align="start" sideOffset={4}>
       <ThreadHoverCard
@@ -303,6 +308,15 @@ function SidebarThreadTooltip({
           <div className="flex min-w-0 items-center gap-2">
             <GitBranchIcon className="size-3 shrink-0 stroke-muted-foreground" />
             <MiddleTruncate value={thread.branch} className="flex" />
+          </div>
+        ) : null}
+        {thread.tags && thread.tags.length > 0 ? (
+          <div className="flex min-w-0 items-start gap-2">
+            <TagIcon className="mt-0.5 size-3 shrink-0 stroke-muted-foreground" />
+            {/* Capped so a long tag list wraps instead of stretching the card to its max width. */}
+            <div className="min-w-0 max-w-48 flex-1 wrap-break-word text-foreground/75">
+              {sortThreadTags(thread.tags, tagStyles).join(", ")}
+            </div>
           </div>
         ) : null}
         {branchMismatch ? (
@@ -1171,7 +1185,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     !showsScratchMachine &&
     prBadge === null &&
     diff === null &&
-    runningTerminalIds.length === 0;
+    runningTerminalIds.length === 0 &&
+    (thread.tags?.length ?? 0) === 0;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
       {checkoutThread.branch ? (
@@ -1201,6 +1216,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           <span className="text-diff-deletion-foreground">−{formatDiffCount(diff.deletions)}</span>
         </span>
       ) : null}
+      <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
       <span
         aria-hidden
         className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
@@ -1282,6 +1298,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {draftIndicator}
               {title}
+              {multiline ? null : (
+                <ThreadTagChips environmentId={thread.environmentId} tags={thread.tags} />
+              )}
               {multiline ? titleLineIcons : null}
               {pinIndicator}
               {multiline ? null : terminalStatusIcon}
@@ -1643,6 +1662,48 @@ function latestRunDiff(
 const scrollHighlightedResultIntoView = (node: HTMLLIElement | null) => {
   node?.scrollIntoView({ block: "nearest" });
 };
+
+/** A project or tag the search query names; picking it sets the sidebar filter. */
+export function SidebarSearchScopeRow(props: {
+  kind: "Project" | "Tag";
+  label: string;
+  icon: ReactNode;
+  isHighlighted: boolean;
+  resultId: string;
+  onHighlight: () => void;
+  onSelect: (additive: boolean) => void;
+}) {
+  return (
+    <li
+      ref={props.isHighlighted ? scrollHighlightedResultIntoView : undefined}
+      role="presentation"
+      className="list-none"
+    >
+      <button
+        id={props.resultId}
+        type="button"
+        role="option"
+        tabIndex={-1}
+        aria-selected={props.isHighlighted}
+        aria-label={`Filter by ${props.kind.toLowerCase()} ${props.label}`}
+        onMouseMove={props.onHighlight}
+        // Focus stays in the search box, as for thread results.
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={(event) => props.onSelect(event.shiftKey)}
+        className={cn(
+          "flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1 text-left text-sm outline-none",
+          props.isHighlighted
+            ? "bg-sidebar-row-active text-sidebar-foreground"
+            : "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+        )}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center">{props.icon}</span>
+        <span className="min-w-0 flex-1 truncate">{props.label}</span>
+        <span className="shrink-0 text-xs text-sidebar-muted-foreground">{props.kind}</span>
+      </button>
+    </li>
+  );
+}
 
 export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   isSettled: boolean;

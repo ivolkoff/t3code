@@ -178,6 +178,25 @@ it("drops hand-edited bad tag entries and keeps the rest of the settings", () =>
   expect(settings.paceHoldTagThresholds).toEqual([{ tag: "critical", aheadPercent: 15 }]);
 });
 
+it("reads tag styles leniently: absent is empty, an unknown color is gray, a bad entry drops", () => {
+  expect(decodeServerSettings({}).threadTagStyles).toEqual([]);
+  const settings = decodeServerSettings({
+    threadTagStyles: [
+      { tag: "critical", color: "red" },
+      { tag: "later", color: "chartreuse" },
+      { tag: "", color: "blue" },
+      { color: "blue" },
+      "loose",
+    ],
+    hideTaggedThreads: true,
+  });
+  expect(settings.threadTagStyles).toEqual([
+    { tag: "critical", color: "red" },
+    { tag: "later", color: "gray" },
+  ]);
+  expect(settings.hideTaggedThreads).toBe(true);
+});
+
 describe("ServerSettings secret providers", () => {
   const onePassword = (account: string) => ({
     kind: "one_password",

@@ -10,9 +10,16 @@ import {
 } from "./thread-list-v2-row-appearance";
 import { RowPressable } from "../../components/ui/RowPressable";
 import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
+import { Chip } from "../../components/ui/Chip";
+import { openThreadTagsSheet } from "./ThreadTagsSheet";
+import { visibleThreadTags } from "./thread-tags";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { threadArrangementOpenAtom } from "../../state/thread-order";
 import { threadEnvironment } from "../../state/threads";
+import { serverEnvironment } from "../../state/server";
+import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
+import { THREAD_TAG_PALETTE, threadTagColor } from "@t3tools/client-runtime/state/threadTagStyles";
+import { useAtomValue } from "@effect/atom-react";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
 import type { ThreadMoveDestination } from "./threadOrder";
@@ -691,6 +698,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly snoozePresets: ReadonlyArray<SnoozePresetSetting> | undefined;
   readonly pinningSupported: boolean;
   readonly autoSettleOptOutSupported: boolean;
+  readonly tagsSupported: boolean;
   readonly titleRegenerationSupported: boolean;
   readonly reorderSupported?: boolean;
   readonly onMoveThread?: (
@@ -736,6 +744,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onSetThreadAutoSettle,
     onMoveThread,
   } = props;
+  const tagStyles = useAtomValue(serverEnvironment.threadTagStylesAtom(thread.environmentId));
+  const { themeAppearance } = useAppearancePreferences();
+  const rowTags = visibleThreadTags(thread.tags, tagStyles);
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
   const dormant = useSwipeRowDormant(props.activationKey);
@@ -797,6 +808,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     providerNameLabel,
     hasQueuedMessages: props.hasQueuedMessages === true,
     regeneratingTitle: isRegeneratingTitle,
+    tags: thread.tags,
   });
 
   const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });
@@ -943,6 +955,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const titleMenuItems = useMemo<MenuAction[]>(
     () => [
       { id: "rename", title: "Rename", image: "square.and.pencil" },
+      ...(props.tagsSupported ? [{ id: "tags", title: "Tags…", image: "tag" }] : []),
       ...buildThreadTitleRegenerationMenuItems({
         supported: props.titleRegenerationSupported,
         isRegenerating: isRegeneratingTitle,
@@ -959,7 +972,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           ]
         : []),
     ],
-    [canTurnIntoProject, props.titleRegenerationSupported, thread.runtime, isRegeneratingTitle],
+    [
+      canTurnIntoProject,
+      props.tagsSupported,
+      props.titleRegenerationSupported,
+      thread.runtime,
+      isRegeneratingTitle,
+    ],
   );
   const menuActions = useMemo<MenuAction[]>(() => {
     const nested = Platform.OS === "ios";
@@ -1060,6 +1079,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "move-down") handleMoveDown();
       if (nativeEvent.event === "archive") handleArchive();
       if (nativeEvent.event === "rename") handleRename();
+      if (nativeEvent.event === "tags") openThreadTagsSheet(thread);
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
       if (nativeEvent.event === "turn-into-project") void turnThreadIntoProject(thread);
       if (nativeEvent.event === "mark-unread") {
@@ -1184,6 +1204,22 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       : `Opens the thread. Swipe left for ${primaryAction.label.toLowerCase()} and snooze actions.`;
 
   const titleTextInset = props.project ? projectIconSize + 8 : 0;
+  const renderTagChips = (paddingLeft: number) =>
+    rowTags.shown.length > 0 ? (
+      <View className="mt-1 flex-row gap-1" style={{ paddingLeft }}>
+        {rowTags.shown.map((tag) => (
+          <View key={tag} className="min-w-0 shrink">
+            <Chip
+              size="small"
+              label={tag}
+              tint={THREAD_TAG_PALETTE[threadTagColor(tag, tagStyles)][themeAppearance]}
+            />
+          </View>
+        ))}
+        {rowTags.overflow > 0 ? <Chip size="small" label={`+${rowTags.overflow}`} /> : null}
+      </View>
+    ) : null;
+
   const cardContent = (
     <>
       <View className="flex-row items-start gap-2">
@@ -1320,6 +1356,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           />
         </View>
       ) : null}
+      {renderTagChips(titleTextInset)}
       <View className="mt-1 flex-row items-center gap-2" style={{ paddingLeft: titleTextInset }}>
         {(rawStatus === "failed" || rawStatus === "limited") && thread.runtime?.lastError ? (
           <Text
@@ -1554,6 +1591,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 selected={selected}
               />
             ) : null}
+            {renderTagChips(0)}
           </View>
           {props.hasQueuedMessages ? <QueuedMessageIcon selected={selected} /> : null}
           <Text
