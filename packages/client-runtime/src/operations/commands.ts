@@ -152,6 +152,8 @@ export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly regenerateTitle?: boolean;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
   readonly expectedEmpty?: boolean;
+  readonly workingOn?: string | null;
+  readonly workingOnDone?: boolean;
 }
 
 export interface SetThreadRuntimeModeInput extends ThreadCommandInput {
@@ -708,7 +710,9 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
       input.worktreePath !== undefined ||
       input.regenerateTitle !== undefined ||
       input.linkedPullRequest !== undefined ||
-      input.limitRecovery !== undefined
+      input.limitRecovery !== undefined ||
+      input.workingOn !== undefined ||
+      input.workingOnDone !== undefined
     ) {
       result = yield* dispatch({
         type: "thread.metadata.update",
@@ -723,6 +727,8 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
         ...(input.linkedPullRequest === undefined
           ? {}
           : { linkedPullRequest: input.linkedPullRequest }),
+        ...(input.workingOn === undefined ? {} : { workingOn: input.workingOn }),
+        ...(input.workingOnDone === undefined ? {} : { workingOnDone: input.workingOnDone }),
       });
     }
     if (input.modelSelection !== undefined) {

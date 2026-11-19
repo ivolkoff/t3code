@@ -144,6 +144,8 @@ it.effect("resets a fork's pin, snooze, settle and delegation state but keeps it
       pinOrderKey: "a0",
       activeOrderKey: "a1",
       autoSettleDisabledAt: snoozedAt,
+      workingOn: "Source task",
+      workingOnDoneAt: snoozedAt,
       delegatedFrom: {
         environmentId: EnvironmentId.make("linked-environment"),
         threadId: ThreadId.make("linked-parent"),
@@ -166,6 +168,8 @@ it.effect("resets a fork's pin, snooze, settle and delegation state but keeps it
     assert.isNull(result.targetThread.pinOrderKey);
     assert.isNull(result.targetThread.activeOrderKey);
     assert.isNull(result.targetThread.autoSettleDisabledAt);
+    assert.isNull(result.targetThread.workingOn);
+    assert.isNull(result.targetThread.workingOnDoneAt);
     assert.isUndefined(result.targetThread.delegatedFrom);
     assert.equal(result.targetThread.historyOrigin, "v1_import");
     assert.deepEqual(result.targetThread.linkOrigin, linkOrigin);

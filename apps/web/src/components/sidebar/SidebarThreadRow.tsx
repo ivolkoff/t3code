@@ -56,6 +56,7 @@ import {
   PinOffIcon,
   ShieldQuestionIcon,
   SquarePenIcon,
+  TargetIcon,
   TerminalIcon,
   Undo2Icon,
   UserRoundIcon,
@@ -289,6 +290,14 @@ function SidebarThreadTooltip({
           ) : null
         }
       >
+        {thread.workingOn ? (
+          <div className="flex min-w-0 items-start gap-2">
+            <TargetIcon aria-hidden className="mt-0.5 size-3 shrink-0 stroke-muted-foreground" />
+            <div className="min-w-0 flex-1 wrap-break-word text-foreground/75">
+              Working on: {thread.workingOn}
+            </div>
+          </div>
+        ) : null}
         {projectDisplayName ? (
           <div className="flex min-w-0 items-center gap-2">
             {project ? <ProjectFavicon project={project} className="size-3 shrink-0" /> : null}
@@ -1180,7 +1189,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ) : null;
   const diff = latestRunDiff(thread);
   // Only the trailing icons would remain, so the row moves them to the title line instead.
+  const workingOn = thread.workingOn || null;
   const metaLineEmpty =
+    workingOn === null &&
     !checkoutThread.branch &&
     !showsScratchMachine &&
     prBadge === null &&
@@ -1189,7 +1200,27 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     (thread.tags?.length ?? 0) === 0;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
-      {checkoutThread.branch ? (
+      {workingOn !== null ? (
+        <>
+          {/* A worktree's branch folds into its icon; its name stays in the hover card. */}
+          <ThreadWorktreeIndicator thread={checkoutThread} />
+          {showsScratchMachine ? (
+            <EnvironmentMachineIcon
+              aria-hidden
+              kind={props.environmentMachine}
+              className="size-3 shrink-0"
+            />
+          ) : null}
+          <span className="min-w-0 flex-1 truncate" dir={textDirection(workingOn)}>
+            {workingOn}
+          </span>
+          {checkoutThread.branch && !checkoutThread.worktreePath?.trim() ? (
+            <span className="flex min-w-0 max-w-1/2">
+              <MiddleTruncate value={checkoutThread.branch} showTitle={false} />
+            </span>
+          ) : null}
+        </>
+      ) : checkoutThread.branch ? (
         <>
           <ThreadWorktreeIndicator thread={checkoutThread} />
           <span className="flex min-w-0 flex-1">
