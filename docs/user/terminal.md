@@ -20,6 +20,24 @@ Jump to latest in the context menu returns to the current output.
 On iPhone and iPad, long-press the terminal to paste or to choose Select Text.
 Select Text shows the visible output, where you can copy text or tap a link.
 
+## Agents in the terminal
+
+In full-access threads, the agent can open a terminal in the thread's drawer,
+type into it, and read what it shows, so it can drive interactive programs such
+as `psql` or a REPL. It can also use terminals you opened in that thread. When a
+program asks for a password, the agent tells you which terminal to type it in;
+it waits for the program's prompt and then carries on. Terminals the agent
+opened close when the thread settles.
+
+Scripts can do the same with `t3 terminal`, for example:
+
+```sh
+t3 terminal open --thread <thread-id> --command psql
+t3 terminal wait --thread <thread-id> <terminal-id> --regex '=> $'
+t3 terminal send-text --thread <thread-id> <terminal-id> $'select 1;\n'
+t3 terminal read --thread <thread-id> <terminal-id> --source visible
+```
+
 ## fish
 
 T3 Code starts fish with `no-query-term`, avoiding startup waits for terminal
