@@ -46,6 +46,12 @@ describe("RPC authorization scopes", () => {
     }
   });
 
+  it("keeps event hooks, which run a client's command on the host, behind settings write", () => {
+    for (const method of [WS_METHODS.serverTestEventHook, WS_METHODS.serverGetEventHookRuns]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthSettingsWriteScope);
+    }
+  });
+
   it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
       AuthOrchestrationOperateScope,
