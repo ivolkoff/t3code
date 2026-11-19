@@ -13,10 +13,12 @@ import {
 import {
   type ResetCreditChoice,
   resetCreditChoices,
+  formatPaceReserve,
   formatResetsIn,
   limitsNotice,
   paceOf,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import { type ReactNode, useContext, useRef, useState } from "react";
@@ -57,6 +59,7 @@ function WindowRow(props: {
   const remaining = remainingPercent(window);
   const timeLeft = paceRemainingPercent(window, now);
   const pace = paceOf(window, now);
+  const reserve = paceReservePercent(window, now);
   const resetsIn = formatResetsIn(window, now);
   const [barWidth, setBarWidth] = useState(0);
   const tickX =
@@ -126,7 +129,10 @@ function WindowRow(props: {
       </View>
       {pace || resetsIn ? (
         <View className="flex-row justify-between gap-3">
-          <Text className="text-xs text-foreground-tertiary">{pace ? PACE_LABEL[pace] : ""}</Text>
+          <Text className="text-xs text-foreground-tertiary">
+            {pace ? PACE_LABEL[pace] : ""}
+            {pace && reserve !== null ? ` · ${formatPaceReserve(reserve)}` : ""}
+          </Text>
           <Text className="text-xs tabular-nums text-foreground-tertiary">{resetsIn ?? ""}</Text>
         </View>
       ) : null}

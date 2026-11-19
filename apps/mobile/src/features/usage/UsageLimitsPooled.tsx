@@ -10,8 +10,10 @@ import {
   collectLimitPools,
   cursorUsageWindowDetails,
   displayLimitWindows,
+  formatPaceReserve,
   formatResetsIn,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
   type LimitAccount,
   type LimitPoolWindow,
@@ -536,7 +538,7 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
     .find((candidate) => candidate.driver === account?.driver)
     ?.windows.find((candidate) => candidate.id === windowId && candidate.kind === windowKind);
   const window = pool?.members.find((member) => member.account.key === accountKey)?.window;
-  const evenPace = window ? paceRemainingPercent(window, now) : null;
+  const evenPace = window ? paceReservePercent(window, now) : null;
   const reset = pool?.resets.find((candidate) => candidate.member.account.key === accountKey);
   const [revealed, setRevealed] = useState(false);
   return (
@@ -595,7 +597,7 @@ export function UsageLimitAccountScreen({ route }: AccountScreenProps) {
               ) : null}
               {evenPace !== null ? (
                 <Text className="text-sm text-foreground-muted">
-                  Even pace: {evenPace}% left by now
+                  Even pace: {formatPaceReserve(evenPace)}
                 </Text>
               ) : null}
               {reset && reset.restoresPercent > 0 ? (
