@@ -188,7 +188,7 @@ export function ArchivedThreadsPanel() {
       localApi.dialogs.confirm(
         [
           `Delete ${plural(count, "archived thread")} in ${label}?`,
-          "This permanently clears conversation history for these threads.",
+          "This permanently clears conversation history for these threads. Their worktrees are kept unless worktree cleanup on delete is on.",
         ].join("\n"),
         { variant: "destructive" },
       ),
@@ -200,7 +200,10 @@ export function ArchivedThreadsPanel() {
       deleteSelectedThreadEntries({
         entries,
         delete: ({ thread }, deletedThreadKeys) =>
-          deleteThread(scopeThreadRef(thread.environmentId, thread.id), { deletedThreadKeys }),
+          deleteThread(scopeThreadRef(thread.environmentId, thread.id), {
+            deletedThreadKeys,
+            askAboutWorktree: false,
+          }),
       }),
     ).finally(() => {
       for (const { threadKey } of entries) pending.delete(threadKey);
@@ -218,7 +221,7 @@ export function ArchivedThreadsPanel() {
       type="button"
       variant="destructive-outline"
       size="compact"
-      disabled={threads.every((thread) => pendingKeys.has(threadKeyOf(thread)))}
+      disabled={threads.some((thread) => pendingKeys.has(threadKeyOf(thread)))}
       onClick={() => void deleteArchivedThreads(threads, label)}
     >
       <Trash2Icon />
