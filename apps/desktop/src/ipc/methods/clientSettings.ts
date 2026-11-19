@@ -7,6 +7,7 @@ import * as BrowserSession from "../../preview/BrowserSession.ts";
 import * as PreviewManager from "../../preview/Manager.ts";
 import * as DesktopClientSettings from "../../settings/DesktopClientSettings.ts";
 import * as DesktopSnapShot from "../../snapShot/DesktopSnapShot.ts";
+import * as DesktopWindowToggleShortcut from "../../window/DesktopWindowToggleShortcut.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
@@ -32,5 +33,6 @@ export const setClientSettings = DesktopIpc.makeIpcMethod({
     yield* snapShot.configure(settings);
     yield* browserSession.setUserAgent(settings);
     yield* (yield* PreviewManager.PreviewManager).refreshUserAgent();
+    yield* (yield* DesktopWindowToggleShortcut.DesktopWindowToggleShortcut).configure(settings);
   }),
 });
