@@ -2545,6 +2545,37 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     );
   });
 
+  // Without metadata Chromium drops Sec-CH-UA for an overridden User-Agent, so a Chrome preset sends both.
+  // Emulation outranks the session User-Agent; an empty one hands it back.
+  const applyUserAgentOverride = Effect.fnUntraced(function* (
+    tabId: string,
+    wc: Electron.WebContents,
+    control: BrowserControlSession,
+    clearWhenNone: boolean,
+  ) {
+    const identity = yield* browserSession.userAgentMetadata;
+    if (identity === null && !clearWhenNone) return;
+    yield* attemptPromise(
+      { operation: "applyUserAgentOverride", tabId, webContentsId: wc.id },
+      () =>
+        control.debugger.sendCommand(
+          "Emulation.setUserAgentOverride",
+          identity === null
+            ? { userAgent: "" }
+            : { userAgent: identity.userAgent, userAgentMetadata: identity.metadata },
+        ),
+    );
+  });
+
+  const refreshUserAgent = Effect.fn("PreviewManager.refreshUserAgent")(function* () {
+    for (const [webContentsId, control] of yield* SynchronizedRef.get(controlSessionsRef)) {
+      const wc = webContents.fromId(webContentsId);
+      const tabId = yield* tabIdForWebContents(webContentsId);
+      if (!wc || wc.isDestroyed() || tabId === null) continue;
+      yield* applyUserAgentOverride(tabId, wc, control, true).pipe(Effect.ignore);
+    }
+  });
+
   // The scheme is read after the session attaches so a concurrent setColorScheme is not
   // overwritten with a stale snapshot.
   const restoreControlSession = Effect.fn("PreviewManager.restoreControlSession")(
@@ -2574,6 +2605,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           });
         }
       }
+      yield* applyUserAgentOverride(tabId, wc, control, false).pipe(Effect.ignore);
       if (afterAttach.colorScheme !== "system") {
         yield* attemptPromise({ operation: "applyColorScheme", tabId, webContentsId: wc.id }, () =>
           control.debugger.sendCommand("Emulation.setEmulatedMedia", {
@@ -3730,6 +3762,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     setShown,
     setCaptureDrawn,
     setColorScheme,
+    refreshUserAgent,
     setMainWindow,
     setForwardedShortcuts: (shortcuts: ReadonlyArray<PreviewForwardedShortcut>) =>
       Effect.sync(() => {
@@ -3936,6 +3969,8 @@ export class PreviewManager extends Context.Service<
       tabId: string,
       colorScheme: DesktopPreviewColorScheme,
     ) => Effect.Effect<void, PreviewManagerError>;
+    /** Re-sends the preset's User-Agent and Client Hints to every attached tab. */
+    readonly refreshUserAgent: () => Effect.Effect<void>;
     readonly setZoomFactor: (
       tabId: string,
       zoomFactor: number,
@@ -4105,6 +4140,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     findInPage: operations.findInPage,
     stopFindInPage: operations.stopFindInPage,
     setColorScheme: operations.setColorScheme,
+    refreshUserAgent: operations.refreshUserAgent,
     setZoomFactor: operations.setZoomFactor,
     setAudioMuted: operations.setAudioMuted,
     setShown: operations.setShown,

@@ -28,8 +28,9 @@ const { fromPartition, sessions } = vi.hoisted(() => ({
 
 const storage = vi.hoisted(() => ({ root: "" }));
 
-const { fromWebContents } = vi.hoisted(() => ({
+const { fromWebContents, getAllWebContents } = vi.hoisted(() => ({
   fromWebContents: vi.fn<(webContents: unknown) => unknown>(() => null),
+  getAllWebContents: vi.fn<() => unknown[]>(() => []),
 }));
 
 const { appListeners } = vi.hoisted(() => ({
@@ -49,10 +50,16 @@ vi.mock("electron", () => ({
   session: {
     fromPartition,
   },
+  webContents: { getAllWebContents },
 }));
 
+import { ClientSettingsSchema } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as ElectronApp from "../electron/ElectronApp.ts";
+
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
+import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as BrowserSession from "./BrowserSession.ts";
 
 const { showMessageBox, showErrorBox } = vi.hoisted(() => ({
@@ -74,6 +81,7 @@ const layerDialog = Layer.succeed(ElectronDialog.ElectronDialog, {
     })),
   showErrorBox: (title, content) => Effect.sync(() => showErrorBox(title, content)),
 });
+const decodeClientSettings = Schema.decodeSync(ClientSettingsSchema);
 const layer = BrowserSession.layer.pipe(
   Layer.provide(
     Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, layerDialog, ElectronApp.layer),
@@ -239,33 +247,101 @@ describe("BrowserSession", () => {
 
       const calls = browserSession.webRequest.onBeforeSendHeaders.mock.calls;
       assert.strictEqual(calls.length, 1);
-      const [filter, listener] = calls[0] ?? [];
-      assert.deepStrictEqual(filter, {
-        urls: [
-          "https://teams.cloud.microsoft/*",
-          "https://teams.microsoft.com/*",
-          "https://login.microsoftonline.com/*",
-          "https://login.live.com/*",
-          "https://web.whatsapp.com/*",
-        ],
-      });
-      const send = (requestHeaders: Record<string, string>) => {
+      const [listener] = calls[0] ?? [];
+      const send = (url: string, requestHeaders: Record<string, string>) => {
         let response: { requestHeaders?: Record<string, string> } | undefined;
-        listener({ requestHeaders }, (next: typeof response) => {
+        listener({ url, requestHeaders }, (next: typeof response) => {
           response = next;
         });
         return response;
       };
       for (const key of ["User-Agent", "user-agent"]) {
         const requestHeaders = { [key]: nativeUserAgent, Accept: "*/*" };
-        assert.deepStrictEqual(send(requestHeaders), {
+        assert.deepStrictEqual(send("https://teams.microsoft.com/v2/", requestHeaders), {
           requestHeaders: { [key]: teamsUserAgent, Accept: "*/*" },
         });
         assert.strictEqual(requestHeaders[key], nativeUserAgent);
       }
-      assert.deepStrictEqual(send({ Accept: "*/*" }), {});
+      for (const url of ["https://login.microsoftonline.com/common", "https://web.whatsapp.com/"]) {
+        assert.deepStrictEqual(send(url, { "User-Agent": nativeUserAgent }), {
+          requestHeaders: { "User-Agent": teamsUserAgent },
+        });
+      }
+      assert.deepStrictEqual(send("https://teams.microsoft.com/v2/", { Accept: "*/*" }), {});
+      assert.deepStrictEqual(
+        send("https://example.com/", { "User-Agent": nativeUserAgent, Accept: "*/*" }),
+        {},
+      );
     }).pipe(Effect.provide(layer)),
   );
+
+  it.effect("replaces the User-Agent of sessions and open tabs with the configured one", () => {
+    const nativeUserAgent = "Mozilla/5.0 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36";
+    const configured = "Mozilla/5.0 Chrome/146.0.0.0 Safari/537.36";
+    const layerConfigured = BrowserSession.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          layerDialog,
+          ElectronApp.layer,
+          DesktopClientSettings.layerTest(
+            Option.some(
+              decodeClientSettings({
+                browserUserAgentPreset: "custom",
+                browserUserAgent: configured,
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      fromPartition.mockReset();
+      fromPartition.mockImplementation((partition: string) => {
+        let userAgent = nativeUserAgent;
+        const browserSession = {
+          clearCache: vi.fn(() => Promise.resolve()),
+          clearStorageData: vi.fn(() => Promise.resolve()),
+          closeAllConnections: vi.fn(() => Promise.resolve()),
+          storagePath: null,
+          getUserAgent: vi.fn(() => userAgent),
+          setPermissionRequestHandler: vi.fn(),
+          setPermissionCheckHandler: vi.fn(),
+          setUserAgent: vi.fn((next: string) => {
+            userAgent = next;
+          }),
+          webRequest: { onBeforeSendHeaders: vi.fn() },
+        };
+        sessions.set(partition, browserSession);
+        return browserSession;
+      });
+
+      const browserSessions = yield* BrowserSession.BrowserSession;
+      const created = yield* browserSessions.getSession("scope-a");
+      assert.strictEqual(created.getUserAgent(), configured);
+
+      const tab = { session: created, isDestroyed: () => false, setUserAgent: vi.fn() };
+      const otherTab = { session: {}, isDestroyed: () => false, setUserAgent: vi.fn() };
+      getAllWebContents.mockReturnValue([tab, otherTab]);
+
+      yield* browserSessions.setUserAgent({
+        browserUserAgentPreset: "native",
+        browserUserAgent: configured,
+      });
+      assert.strictEqual(created.getUserAgent(), nativeUserAgent);
+      assert.deepStrictEqual(tab.setUserAgent.mock.calls, [[nativeUserAgent]]);
+      assert.strictEqual(otherTab.setUserAgent.mock.calls.length, 0);
+
+      yield* browserSessions.setUserAgent({
+        browserUserAgentPreset: "custom",
+        browserUserAgent: configured,
+      });
+      assert.strictEqual(created.getUserAgent(), configured);
+      assert.deepStrictEqual(tab.setUserAgent.mock.calls.at(-1), [configured]);
+      getAllWebContents.mockReturnValue([]);
+    }).pipe(Effect.provide(layerConfigured));
+  });
 
   it.effect("grants preview permissions through both the request and check handlers", () =>
     Effect.gen(function* () {
@@ -658,4 +734,51 @@ describe("BrowserSession", () => {
       assert.isFalse(yield* fileSystem.exists(file));
     }).pipe(Effect.scoped, Effect.provide(Layer.merge(layer, NodeServices.layer))),
   );
+
+  it.effect("adds Chrome Client Hints to secure requests that lack them", () => {
+    const layerChrome = BrowserSession.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          layerDialog,
+          ElectronApp.layer,
+          DesktopClientSettings.layerTest(
+            Option.some(decodeClientSettings({ browserUserAgentPreset: "chrome" })),
+          ),
+        ),
+      ),
+    );
+    const descriptor = Object.getOwnPropertyDescriptor(process.versions, "chrome");
+    Object.defineProperty(process.versions, "chrome", { value: "152.0.1.2", configurable: true });
+    return Effect.gen(function* () {
+      const browserSessions = yield* BrowserSession.BrowserSession;
+      const partition = yield* browserSessions.getPartition("scope-a");
+      yield* browserSessions.getSession("scope-a");
+      const [listener] =
+        sessions.get(partition)?.webRequest.onBeforeSendHeaders.mock.calls[0] ?? [];
+      const send = (url: string, requestHeaders: Record<string, string>) => {
+        let response: { requestHeaders?: Record<string, string> } | undefined;
+        listener({ url, requestHeaders }, (next: typeof response) => {
+          response = next;
+        });
+        return response;
+      };
+
+      assert.deepInclude(send("https://example.com/", { Accept: "*/*" })?.requestHeaders, {
+        "sec-ch-ua": '"Not?A_Brand";v="24", "Chromium";v="152", "Google Chrome";v="152"',
+        "sec-ch-ua-mobile": "?0",
+      });
+      assert.deepStrictEqual(send("https://example.com/", { "Sec-CH-UA": "kept" }), {});
+      assert.deepStrictEqual(send("http://example.com/", { Accept: "*/*" }), {});
+    }).pipe(
+      Effect.provide(layerChrome),
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (descriptor) Object.defineProperty(process.versions, "chrome", descriptor);
+          else Reflect.deleteProperty(process.versions, "chrome");
+        }),
+      ),
+    );
+  });
 });
