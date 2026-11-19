@@ -45,6 +45,7 @@ interface MarkdownFileLinkProps {
   resolveCopyPaths: () => Promise<ReturnType<typeof markdownFileCopyPaths>>;
   openInEditorMenuLabel: string;
   onOpenInBrowser?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
+  onOpenInSystemBrowser?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   onOpenMedia?: (() => void) | undefined;
   onReveal?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   revealLabel?: string | undefined;
@@ -69,6 +70,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   onOpenInPanel,
   openInEditorMenuLabel,
   onOpenInBrowser,
+  onOpenInSystemBrowser,
   onOpenMedia,
   onReveal,
   revealLabel,
@@ -124,13 +126,13 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
     handleOpenInEditor();
   };
 
-  const handleOpenInBrowser = () => {
-    if (!onOpenInBrowser) {
+  const handleOpenInBrowser = (open = onOpenInBrowser) => {
+    if (!open) {
       return;
     }
     void (async () => {
       try {
-        const result = await onOpenInBrowser();
+        const result = await open();
         if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
           return;
         }
@@ -253,6 +255,9 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
           ...(onOpenInBrowser
             ? ([{ id: "open-in-browser", label: "Open in integrated browser" }] as const)
             : []),
+          ...(onOpenInSystemBrowser
+            ? ([{ id: "open-in-system-browser", label: "Open in system browser" }] as const)
+            : []),
           ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
           ...copyItems.map(({ id, label }) => ({ id, label })),
         ] as const,
@@ -270,6 +275,10 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       }
       if (clicked === "open-in-browser") {
         handleOpenInBrowser();
+        return;
+      }
+      if (clicked === "open-in-system-browser") {
+        handleOpenInBrowser(onOpenInSystemBrowser);
         return;
       }
       if (clicked === "reveal") {
@@ -415,6 +424,7 @@ function areMarkdownFileLinkPropsEqual(
     previous.onOpenInPanel === next.onOpenInPanel &&
     previous.openInEditorMenuLabel === next.openInEditorMenuLabel &&
     previous.onOpenInBrowser === next.onOpenInBrowser &&
+    previous.onOpenInSystemBrowser === next.onOpenInSystemBrowser &&
     previous.onOpenMedia === next.onOpenMedia &&
     previous.onReveal === next.onReveal &&
     previous.resolveCopyPaths === next.resolveCopyPaths &&
