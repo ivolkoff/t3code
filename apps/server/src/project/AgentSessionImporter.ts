@@ -6,8 +6,10 @@ import {
   isRuntimeModeAbove,
   AgentSessionImportProjectChangedError,
   AgentSessionImportProjectNotFoundError,
+  AgentSessionNotFoundError,
   AgentSessionScanError,
   AgentSessionSource,
+  AgentSessionThreadDeletedError,
   EventId,
   MessageId,
   ProjectId,
@@ -15,7 +17,12 @@ import {
   ThreadId,
   TurnItemId,
   type AgentSessionImportInput,
+  type AgentSessionImportOneInput,
+  type AgentSessionImportOneResult,
   type AgentSessionImportResult,
+  type AgentSessionListInput,
+  type AgentSessionListItem,
+  type AgentSessionListResult,
   type OrchestrationV2AppThread,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2DomainEvent,
@@ -31,6 +38,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -204,9 +212,11 @@ const make = Effect.gen(function* () {
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
   const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
   const settingsService = yield* ServerSettings.ServerSettingsService;
+  const sql = yield* SqlClient.SqlClient;
   const ceiling = settingsService.managedPolicy?.limits?.maxRuntimeMode;
   const importRecentAgentThreads = Effect.fn("importRecentAgentThreadsV2")(function* (
     input: AgentSessionImportInput,
+    only?: AgentSessionScanner.AgentSessionTranscriptFilter,
   ) {
     const project = yield* projects.getById(input.projectId).pipe(
       Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-projects", cause })),
@@ -262,7 +272,7 @@ const make = Effect.gen(function* () {
         ),
       );
     })).flat();
-    const outcomes = scanner.recentThreads(project.workspaceRoot, completedSources);
+    const outcomes = scanner.recentThreads(project.workspaceRoot, completedSources, only);
     const importedThreadIds = new Set<ThreadId>();
     let importedCount = 0;
     let skippedCount = 0;
@@ -596,7 +606,164 @@ const make = Effect.gen(function* () {
     return yield* commit(messages);
   });
 
-  return { importRecentAgentThreads, importNativeHistory };
+  const projectRoot = Effect.fn("AgentSessionImporter.projectRoot")(function* (
+    input: AgentSessionListInput,
+  ) {
+    const project = yield* projects.getById(input.projectId).pipe(
+      Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-projects", cause })),
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(new AgentSessionImportProjectNotFoundError({ projectId: input.projectId })),
+          onSome: Effect.succeed,
+        }),
+      ),
+    );
+    if (
+      input.expectedWorkspaceRoot !== undefined &&
+      normalizeProjectPathForComparison(project.workspaceRoot) !==
+        normalizeProjectPathForComparison(input.expectedWorkspaceRoot)
+    ) {
+      return yield* new AgentSessionImportProjectChangedError({ projectId: input.projectId });
+    }
+    return project.workspaceRoot;
+  });
+
+  // Keyed like EventSink's native-thread ownership check; a live owner outranks a deleted one.
+  const readOwners = Effect.fn("AgentSessionImporter.readOwners")(function* () {
+    const rows = yield* sql<{
+      readonly thread_id: string;
+      readonly driver: string;
+      readonly provider_instance_id: string;
+      readonly native_id: string | null;
+      readonly deleted_at: string | null;
+    }>`
+      SELECT provider.thread_id, provider.driver, provider.provider_instance_id,
+        json_extract(provider.payload_json, '$.nativeThreadRef.nativeId') AS native_id,
+        thread.deleted_at
+      FROM orchestration_v2_projection_provider_threads AS provider
+      JOIN orchestration_v2_projection_threads AS thread ON thread.thread_id = provider.thread_id
+      WHERE provider.driver IN ('claudeAgent', 'codex', 'pi')
+      ORDER BY thread.deleted_at IS NULL, thread.updated_at
+    `.pipe(
+      Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-projects", cause })),
+    );
+    const owners = new Map<string, { threadId: ThreadId; deleted: boolean }>();
+    for (const row of rows) {
+      if (row.native_id === null) continue;
+      owners.set(`${row.driver}\0${row.provider_instance_id}\0${row.native_id}`, {
+        threadId: ThreadId.make(row.thread_id),
+        deleted: row.deleted_at !== null,
+      });
+    }
+    return owners;
+  });
+  const ownerKey = (entry: {
+    readonly provider: AgentSessionSource;
+    readonly providerInstanceId: string;
+    readonly providerSessionId: string;
+    readonly filePath: string;
+  }) =>
+    // Pi threads are owned by their session file path.
+    `${entry.provider}\0${entry.providerInstanceId}\0${entry.provider === "pi" ? entry.filePath : entry.providerSessionId}`;
+
+  const listEntries = Effect.fn("AgentSessionImporter.listEntries")(function* (
+    input: AgentSessionListInput,
+  ) {
+    const workspaceRoot = yield* projectRoot(input);
+    const { entries, truncated } = yield* scanner.projectSessions(workspaceRoot);
+    const owners = yield* readOwners();
+    return {
+      truncated,
+      entries: entries.map((entry) => ({ entry, owner: owners.get(ownerKey(entry)) ?? null })),
+    };
+  });
+
+  const listSessions = Effect.fn("AgentSessionImporter.listSessions")(function* (
+    input: AgentSessionListInput,
+  ) {
+    const { entries, truncated } = yield* listEntries(input);
+    return {
+      sessions: entries.map(({ entry, owner }): AgentSessionListItem => ({
+        provider: entry.provider,
+        providerInstanceId: entry.providerInstanceId,
+        providerSessionId: entry.providerSessionId,
+        title: entry.title,
+        lastActiveAt: entry.lastActiveAt,
+        branch: entry.branch,
+        threadId: owner?.threadId ?? null,
+        threadDeleted: owner?.deleted ?? false,
+      })),
+      ...(truncated ? { truncated: true } : {}),
+    } satisfies AgentSessionListResult;
+  });
+
+  const importSession = Effect.fn("AgentSessionImporter.importSession")(function* (
+    input: AgentSessionImportOneInput,
+  ) {
+    const notFound = new AgentSessionNotFoundError({
+      projectId: input.projectId,
+      providerSessionId: input.providerSessionId,
+    });
+    const { entries } = yield* listEntries(input);
+    const listed = entries.find(
+      ({ entry }) =>
+        entry.providerInstanceId === input.providerInstanceId &&
+        entry.providerSessionId === input.providerSessionId,
+    );
+    if (listed === undefined) return yield* notFound;
+    const resolveOwner = (owner: { threadId: ThreadId; deleted: boolean } | null | undefined) =>
+      owner == null
+        ? Effect.fail(notFound)
+        : owner.deleted
+          ? Effect.fail(new AgentSessionThreadDeletedError({ threadId: owner.threadId }))
+          : Effect.succeed(owner.threadId);
+    if (listed.owner !== null) {
+      return {
+        threadId: yield* resolveOwner(listed.owner),
+        imported: false,
+      } satisfies AgentSessionImportOneResult;
+    }
+    const { importedCount } = yield* importRecentAgentThreads(input, {
+      providerInstanceId: listed.entry.providerInstanceId,
+      filePath: listed.entry.filePath,
+    });
+    // The full read names the session, which can differ from the listed name, and the
+    // import records that name with the transcript.
+    const runtimeRows = yield* runtimes
+      .list()
+      .pipe(
+        Effect.mapError(
+          (cause) => new AgentSessionScanError({ operation: "read-projects", cause }),
+        ),
+      );
+    const recorded = runtimeRows
+      .flatMap((runtime) =>
+        Option.getOrElse(
+          AgentSessionScanner.decodeImportedTranscriptPayload(runtime.runtimePayload).pipe(
+            Option.flatMapNullishOr((payload) => payload.importedTranscripts),
+          ),
+          () => [],
+        ),
+      )
+      .find(
+        (source) =>
+          source.providerInstanceId === listed.entry.providerInstanceId &&
+          source.filePath === listed.entry.filePath,
+      );
+    // A batch import can commit the thread before it records the transcript; fall back to the listed name.
+    return {
+      threadId: yield* resolveOwner((yield* readOwners()).get(ownerKey(recorded ?? listed.entry))),
+      imported: importedCount === 1,
+    } satisfies AgentSessionImportOneResult;
+  });
+
+  return {
+    importRecentAgentThreads,
+    importNativeHistory,
+    listSessions,
+    importSession,
+  };
 });
 
 type AgentSessionImporterShape = Effect.Success<typeof make>;

@@ -1,5 +1,11 @@
 import * as Schema from "effect/Schema";
-import { IsoDateTime, NonNegativeInt, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  IsoDateTime,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const AgentSessionSource = Schema.Literals(["claudeAgent", "codex", "pi"]);
@@ -77,6 +83,62 @@ export const AgentSessionImportResult = Schema.Struct({
   skippedCount: NonNegativeInt,
 });
 export type AgentSessionImportResult = typeof AgentSessionImportResult.Type;
+
+export const AgentSessionListInput = Schema.Struct({
+  projectId: ProjectId,
+  expectedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
+});
+export type AgentSessionListInput = typeof AgentSessionListInput.Type;
+
+export const AgentSessionListItem = Schema.Struct({
+  provider: AgentSessionSource,
+  providerInstanceId: ProviderInstanceId,
+  providerSessionId: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  lastActiveAt: IsoDateTime,
+  branch: Schema.NullOr(Schema.String),
+  threadId: Schema.NullOr(ThreadId),
+  threadDeleted: Schema.Boolean,
+});
+export type AgentSessionListItem = typeof AgentSessionListItem.Type;
+
+export const AgentSessionListResult = Schema.Struct({
+  sessions: Schema.Array(AgentSessionListItem).check(Schema.isMaxLength(200)),
+  truncated: Schema.optional(Schema.Boolean),
+});
+export type AgentSessionListResult = typeof AgentSessionListResult.Type;
+
+export const AgentSessionImportOneInput = Schema.Struct({
+  projectId: ProjectId,
+  providerInstanceId: ProviderInstanceId,
+  providerSessionId: TrimmedNonEmptyString,
+  expectedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
+});
+export type AgentSessionImportOneInput = typeof AgentSessionImportOneInput.Type;
+
+export const AgentSessionImportOneResult = Schema.Struct({
+  threadId: ThreadId,
+  imported: Schema.Boolean,
+});
+export type AgentSessionImportOneResult = typeof AgentSessionImportOneResult.Type;
+
+export class AgentSessionNotFoundError extends Schema.TaggedError<AgentSessionNotFoundError>()(
+  "AgentSessionNotFoundError",
+  { projectId: ProjectId, providerSessionId: Schema.String },
+) {
+  override get message(): string {
+    return `Conversation '${this.providerSessionId}' could not be imported into project '${this.projectId}'.`;
+  }
+}
+
+export class AgentSessionThreadDeletedError extends Schema.TaggedError<AgentSessionThreadDeletedError>()(
+  "AgentSessionThreadDeletedError",
+  { threadId: ThreadId },
+) {
+  override get message(): string {
+    return `This conversation belonged to thread '${this.threadId}', which was deleted.`;
+  }
+}
 
 export class AgentSessionScanError extends Schema.TaggedError<AgentSessionScanError>()(
   "AgentSessionScanError",

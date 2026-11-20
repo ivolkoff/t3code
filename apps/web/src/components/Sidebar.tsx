@@ -258,6 +258,7 @@ import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
+import { openImportAgentSessionDialog } from "./ImportAgentSessionDialog";
 import {
   composerDraftHasUserContent,
   DraftId,
@@ -1273,6 +1274,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           api.contextMenu.show(
             [
               { id: "new-thread", label: gt("New thread") },
+              { id: "import-session", label: gt("Import CLI conversation…") },
               { id: "copy-path", label: gt("Copy path") },
               ...(canPinProject(group)
                 ? [
@@ -1291,6 +1293,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         switch (clicked.value) {
           case "new-thread":
             startThreadInProjectFolder(group);
+            return;
+          case "import-session":
+            if (isMobile) setOpenMobile(false);
+            openImportAgentSessionDialog(scopeProjectRef(group.environmentId, group.id));
             return;
           case "copy-path":
             copyPathToClipboard(group.workspaceRoot, { path: group.workspaceRoot });
