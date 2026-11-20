@@ -12,11 +12,15 @@ describe("T3ProjectFileFromJson", () => {
       "iconPath": "assets/logo.svg",
       "scripts": [
         { "name": "Dev", "command": "pnpm dev", "stopOnSettle": true, },
+        { "name": "Ship", "command": "pnpm ship", "icon": "build", "iconName": "rocket" },
       ],
     }`);
 
     expect(decoded.iconPath).toBe("assets/logo.svg");
-    expect(decoded.scripts?.[0]).toEqual({ name: "Dev", command: "pnpm dev", stopOnSettle: true });
+    expect(decoded.scripts).toEqual([
+      { name: "Dev", command: "pnpm dev", stopOnSettle: true },
+      { name: "Ship", command: "pnpm ship", icon: "build", iconName: "rocket" },
+    ]);
   });
 });
 

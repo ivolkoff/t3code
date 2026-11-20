@@ -2694,6 +2694,7 @@
   "2d1f6668f713dca9": "Add Action",
   "da1b3bc9635dcdc8": "Actions are project-scoped commands you can run from the top bar or keybindings.",
   "4614a422f1430cd7": "Name",
+  "9c6425bfbbebf750": "Other…",
   "d3502e7db0cdb998": "Keybinding",
   "86f71ac04d41f95e": [
     "Press a shortcut. Use ",
@@ -8948,6 +8949,8 @@
   "094ddd39c2536c8d": "Monogram",
   "b0cbc9acb4698e63": "Color",
   "91547f3c1c36c209": "No icons found.",
+  "ee6db394257ae3a7": "Choose action icon",
+  "0ef83cff83f8a909": "Pick any Lucide icon for this action.",
   "236f83dec2ef4eba": "Letters",
   "cd2acbace965052d": "One or two letters or numbers.",
   "fc10b8da35c8560e": "Or paste any emoji",

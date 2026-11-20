@@ -2694,6 +2694,7 @@
   "2d1f6668f713dca9": "Ajouter une action",
   "da1b3bc9635dcdc8": "Les actions sont des commandes propres au projet que vous pouvez lancer depuis la barre supérieure ou des raccourcis clavier.",
   "4614a422f1430cd7": "Nom",
+  "9c6425bfbbebf750": "Other…",
   "d3502e7db0cdb998": "Raccourci clavier",
   "86f71ac04d41f95e": [
     "Appuyez sur un raccourci. Utilisez ",
@@ -8940,6 +8941,8 @@
   "094ddd39c2536c8d": "Monogramme",
   "b0cbc9acb4698e63": "Couleur",
   "91547f3c1c36c209": "Aucune icône trouvée.",
+  "ee6db394257ae3a7": "Choose action icon",
+  "0ef83cff83f8a909": "Pick any Lucide icon for this action.",
   "236f83dec2ef4eba": "Lettres",
   "cd2acbace965052d": "Une ou deux lettres ou chiffres.",
   "fc10b8da35c8560e": "Ou collez n’importe quel emoji",
