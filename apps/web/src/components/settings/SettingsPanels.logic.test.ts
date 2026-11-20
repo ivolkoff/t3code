@@ -12,6 +12,7 @@ import {
   getChangedBrowserSettingLabels,
   hasChangedBackgroundActivitySettings,
   syncAutoSettleDaysField,
+  paceHoldTagOptions,
 } from "./SettingsPanels.logic";
 
 describe("background activity settings restore", () => {
@@ -170,5 +171,16 @@ describe("auto-settle days field", () => {
   it("keeps a draft in progress when the saved value changes underneath it", () => {
     const typing = type(autoSettleDaysField(14), "4");
     expect(syncAutoSettleDaysField(typing, 30)).toMatchObject({ saved: 30, draft: "4" });
+  });
+});
+
+describe("paceHoldTagOptions", () => {
+  it("dedupes case-insensitively, puts special tags first and skips configured ones", () => {
+    expect(
+      paceHoldTagOptions(
+        [["Review", " infra "], undefined, ["review", "Critical"], ["Background", "docs"]],
+        [{ tag: "docs" }, { tag: "critical" }],
+      ),
+    ).toEqual(["background", "infra", "review"]);
   });
 });

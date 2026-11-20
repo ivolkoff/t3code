@@ -1,5 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
-import { RunId, ThreadId, type OrchestrationV2DomainEvent } from "@t3tools/contracts";
+import {
+  CommandId,
+  MessageId,
+  RunId,
+  ThreadId,
+  type OrchestrationV2ConversationMessage,
+  type OrchestrationV2DomainEvent,
+} from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -79,6 +86,7 @@ const failedThread = (failedAgoMs: number, resetAgoMs: number) => {
     id: ThreadId.make("thread:limited"),
     status: "failed",
     lastErrorClass: "usage_limit",
+    lastErrorCode: "usageLimitExceeded",
     usageLimitResetAt: DateTime.formatIso(DateTime.makeUnsafe(nowMs - resetAgoMs)),
     latestRunId: RunId.make("run:limited"),
     latestRunCompletedAt: failedAt,
@@ -114,5 +122,49 @@ describe("limitRecoveryCommand arming", () => {
   it("does not arm a reset that is 24 hours and 1ms overdue", () => {
     const thread = failedThread(30 * HOUR_MS, 24 * HOUR_MS + 1);
     assert.isNull(limitRecoveryCommand(thread, true, nowMs));
+  });
+});
+
+describe("limitRecoveryCommand pace hold", () => {
+  const held: ProjectionStore.ProjectionLimitRecoveryCandidate = {
+    ...failedThread(HOUR_MS, -HOUR_MS),
+    lastErrorCode: "pace_hold",
+  };
+  const message = {
+    id: MessageId.make("message:held"),
+    text: "Review the open pull requests",
+    attachments: [],
+    createdBy: "agent",
+    creationSource: "mcp",
+  } as unknown as OrchestrationV2ConversationMessage;
+  const armed = {
+    ...held,
+    limitRecovery: {
+      runId: held.latestRunId!,
+      resetAt: held.usageLimitResetAt!,
+      autoResume: true,
+      requestId: CommandId.make("limit-arm:held"),
+    },
+  };
+
+  it("arms auto-resume with auto-resume off", () => {
+    const arm = limitRecoveryCommand(held, false, nowMs, false, message);
+    assert.equal(arm?.type, "thread.metadata.update");
+    assert.isTrue(arm?.type === "thread.metadata.update" && arm.limitRecovery?.autoResume);
+  });
+
+  it("waits for the wake time", () => {
+    assert.isNull(limitRecoveryCommand(armed, false, nowMs, false, message));
+  });
+
+  it("re-sends the held prompt after the wake time", () => {
+    const resume = limitRecoveryCommand(armed, false, nowMs + 2 * HOUR_MS, false, message);
+    assert.deepInclude(resume, {
+      type: "message.dispatch",
+      usageLimitContinuationOfRunId: held.latestRunId!,
+      text: "Review the open pull requests",
+      createdBy: "agent",
+      creationSource: "mcp",
+    });
   });
 });
