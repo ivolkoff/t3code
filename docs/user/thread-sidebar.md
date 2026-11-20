@@ -249,6 +249,11 @@ thread** from its long-press menu on mobile.
 **Thread ID** copies the bare ID for scripts and the `t3` CLI. See
 [keybindings](./keybindings.md) for custom configuration.
 
+On macOS desktop, right-click the T3 Code icon in the Dock to see the threads that
+need you, such as approvals, questions, and failures, followed by unseen **Done**
+threads from every connected environment. Choose one to open it. The menu fills in
+while the app window is open, even when it is minimized or hidden.
+
 ## Inspect agent work
 
 **Limited** means the provider stopped on a usage or rate limit. The conversation
