@@ -21,6 +21,7 @@ import * as ElectronWindow from "../../electron/ElectronWindow.ts";
 import * as ElectronDialog from "../../electron/ElectronDialog.ts";
 import * as DesktopSnapShot from "../../snapShot/DesktopSnapShot.ts";
 import { m } from "../../i18n/messages.ts";
+import * as DesktopWindowToggleShortcut from "../../window/DesktopWindowToggleShortcut.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
@@ -160,6 +161,10 @@ export const setSnapShotShortcutSuppressed = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.snapShot.setShortcutSuppressed")(function* (suppressed, event) {
     yield* ensureTrustedSnapShotSender(event);
     yield* (yield* DesktopSnapShot.DesktopSnapShot).setShortcutSuppressed(suppressed);
+    // The settings recorder for the show/hide shortcut must not fire it either.
+    yield* (yield* DesktopWindowToggleShortcut.DesktopWindowToggleShortcut).setSuppressed(
+      suppressed,
+    );
   }),
 });
 
