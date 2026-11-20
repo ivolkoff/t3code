@@ -91,6 +91,7 @@ import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import {
   animateSidebarLayoutChanges,
   hasUnseenCompletion,
+  resolveSidebarBranchDivergence,
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
   resolveSidebarRowStatus,
@@ -265,6 +266,7 @@ function SidebarThreadTooltip({
   modelInstanceId,
   modelLabel,
   branchMismatch,
+  branchDivergence,
   terminalStatus,
   terminalProcessCount,
 }: {
@@ -282,6 +284,7 @@ function SidebarThreadTooltip({
     threadBranch: string;
     currentBranch: string;
   } | null;
+  branchDivergence: { label: string; description: string } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
 }) {
@@ -334,6 +337,9 @@ function SidebarThreadTooltip({
             <GitBranchIcon className="size-3 shrink-0 stroke-muted-foreground" />
             <MiddleTruncate value={thread.branch} className="flex" />
           </div>
+        ) : null}
+        {branchDivergence ? (
+          <div className="min-w-0 pl-5 text-foreground/75">{branchDivergence.description}</div>
         ) : null}
         {branchMismatch ? (
           <div className="flex min-w-0 items-start gap-2 text-warning">
@@ -860,6 +866,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     activeThreadBranch: thread.branch,
     currentGitBranch: visibleGitStatus?.refName ?? null,
   });
+  const branchDivergence = resolveSidebarBranchDivergence(
+    {
+      status: visibleGitStatus,
+      branch: checkoutThread.branch,
+      worktreePath: checkoutThread.worktreePath,
+    },
+    messages,
+  );
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider, messages);
 
   const modelInstanceId = thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId;
@@ -890,6 +904,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       modelInstanceId={modelInstanceId}
       modelLabel={modelLabel}
       branchMismatch={branchMismatch}
+      branchDivergence={branchDivergence}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
     />
@@ -1311,6 +1326,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           <ThreadWorktreeIndicator thread={checkoutThread} />
           <span className="flex min-w-0 flex-1">
             <MiddleTruncate value={checkoutThread.branch} showTitle={false} />
+            {branchDivergence ? (
+              <span aria-label={branchDivergence.description} className="ml-1 shrink-0 font-mono">
+                {branchDivergence.label}
+              </span>
+            ) : null}
           </span>
         </>
       ) : showsScratchMachine ? (
@@ -1863,6 +1883,14 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
     activeThreadBranch: thread.branch,
     currentGitBranch: visibleGitStatus?.refName ?? null,
   });
+  const branchDivergence = resolveSidebarBranchDivergence(
+    {
+      status: visibleGitStatus,
+      branch: checkoutThread.branch,
+      worktreePath: checkoutThread.worktreePath,
+    },
+    messages,
+  );
   const modelInstanceId = thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId;
   const providerEntry = props.providerEntryByInstanceId.get(modelInstanceId) ?? null;
   const showInstanceBadge =
@@ -2005,6 +2033,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
           modelInstanceId={modelInstanceId}
           modelLabel={modelLabel}
           branchMismatch={branchMismatch}
+          branchDivergence={branchDivergence}
           terminalStatus={terminalStatus}
           terminalProcessCount={runningTerminalIds.length}
         />

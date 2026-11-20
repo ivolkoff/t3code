@@ -14,6 +14,7 @@ import {
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveSidebarSweepKeys,
+  resolveSidebarBranchDivergence,
   resolveSidebarRowStatus,
   resolveSidebarThreadStatus,
   resolveThreadStatusPill,
@@ -134,6 +135,69 @@ describe("deleteSelectedThreadEntries", () => {
       deletedThreadKeys: testCase.deletedThreadKeys,
       firstFailure: testCase.firstFailure,
     });
+  });
+});
+
+describe("resolveSidebarBranchDivergence", () => {
+  const branch = "feature/a";
+  const worktreePath = "/repo/.worktrees/a";
+  it.each([
+    {
+      name: "a local thread",
+      status: { refName: branch, aheadCount: 2, behindCount: 1 },
+      worktreePath: null,
+      expected: null,
+    },
+    { name: "no counts", status: { refName: branch }, worktreePath, expected: null },
+    { name: "no status", status: null, worktreePath, expected: null },
+    {
+      name: "zero counts",
+      status: { refName: branch, aheadCount: 0, behindCount: 0 },
+      worktreePath,
+      expected: null,
+    },
+    {
+      name: "another branch",
+      status: { refName: "main", aheadCount: 2, behindCount: 0 },
+      worktreePath,
+      expected: null,
+    },
+    {
+      name: "ahead",
+      status: { refName: branch, aheadCount: 2, behindCount: 0 },
+      worktreePath,
+      expected: { label: "↑2", description: "2 commits ahead of upstream" },
+    },
+    {
+      name: "behind",
+      status: { refName: branch, aheadCount: 0, behindCount: 1 },
+      worktreePath,
+      expected: { label: "↓1", description: "1 commit behind upstream" },
+    },
+    {
+      name: "both",
+      status: { refName: branch, aheadCount: 2, behindCount: 1 },
+      worktreePath,
+      expected: { label: "↑2 ↓1", description: "2 commits ahead, 1 behind upstream" },
+    },
+    {
+      name: "one ahead, several behind",
+      status: { refName: branch, aheadCount: 1, behindCount: 3 },
+      worktreePath,
+      expected: { label: "↑1 ↓3", description: "1 commit ahead, 3 behind upstream" },
+    },
+  ])("$name", ({ status, worktreePath, expected }) => {
+    expect(resolveSidebarBranchDivergence({ status, branch, worktreePath })).toEqual(expected);
+  });
+
+  it("hides counts for a row without a branch", () => {
+    expect(
+      resolveSidebarBranchDivergence({
+        status: { refName: null, aheadCount: 2, behindCount: 0 },
+        branch: null,
+        worktreePath,
+      }),
+    ).toBeNull();
   });
 });
 
