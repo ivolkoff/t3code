@@ -66,10 +66,12 @@ export function useThreadActionMenu(input: {
   readonly threadRef: ScopedThreadRef | null;
   readonly projectCwd: string | null;
   readonly onStartRename: () => void;
+  readonly onStartWorkingOnEdit?: (() => void) | undefined;
   readonly onFind?: ((threadRef: ScopedThreadRef) => void) | undefined;
   readonly canShareWithGuest: boolean;
 }) {
-  const { threadRef, projectCwd, onStartRename, onFind, canShareWithGuest } = input;
+  const { threadRef, projectCwd, onStartRename, onStartWorkingOnEdit, onFind, canShareWithGuest } =
+    input;
   const router = useRouter();
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -154,6 +156,9 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        ...(onStartWorkingOnEdit === undefined || thread.workingOn === undefined
+          ? {}
+          : { workingOn: thread.workingOn }),
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
@@ -255,6 +260,9 @@ export function useThreadActionMenu(input: {
           return;
         case "rename":
           onStartRename();
+          return;
+        case "edit-working-on":
+          onStartWorkingOnEdit?.();
           return;
         case "regenerate-title": {
           if (isRegeneratingTitle) return;

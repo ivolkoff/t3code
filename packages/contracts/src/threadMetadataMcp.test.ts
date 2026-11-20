@@ -19,4 +19,27 @@ describe("ThreadMetadataMcpUpdateInput", () => {
       decodeUpdate({ action: "regenerate_title", clientRequestId: "metadata-\udc00" }),
     );
   });
+
+  it("accepts a single-line working-on text or null only for set_working_on", () => {
+    assert.equal(
+      decodeUpdate({ action: "set_working_on", workingOn: "  Fix login #123 " }).workingOn,
+      "Fix login #123",
+    );
+    assert.equal(decodeUpdate({ action: "set_working_on", workingOn: null }).workingOn, null);
+    assert.equal(
+      decodeUpdate({ action: "set_working_on", workingOn: "a".repeat(120) }).action,
+      "set_working_on",
+    );
+    for (const input of [
+      { action: "set_working_on" },
+      { action: "set_working_on", title: "Title" },
+      { action: "set_working_on", workingOn: "a".repeat(121) },
+      { action: "set_working_on", workingOn: "a\nb" },
+      { action: "set_working_on", workingOn: "a\tb" },
+      { action: "rename", title: "Title", workingOn: "x" },
+      { action: "regenerate_title", workingOn: null },
+    ]) {
+      assert.throws(() => decodeUpdate(input), undefined, undefined, JSON.stringify(input));
+    }
+  });
 });

@@ -2737,6 +2737,8 @@
   "d1259290b8c63577": "Byt namn på tråd",
   "6dd1f458bcd6a2ea": "Genererar om…",
   "de30fdae5b3fea98": "Generera om titel",
+  "cafac459938c60a3": "Set working-on line…",
+  "d6d344e5549cecff": "Edit working-on line…",
   "dffd2e20f7ff5aa1": "Markera som oläst",
   "3364346f40934e88": "Visa alla projekt",
   "666f3ac177c116b6": "Filtrera efter {project}",
@@ -3296,12 +3298,24 @@
   ],
   "3dbc42464b2bfb20": "Snabb och Ultrasnabb är inte tillgängliga med den här ChatGPT-anslutningen. Använd en befintlig Codex CLI-inloggning för de hastighetsalternativ ditt konto stöder.",
   "5c0eb4217bb673bd": "Använder ChatGPT-abonnemang",
+  "c939fede859900af": "Failed to update the working-on line",
   "3e545d70d0c3535c": "Trådens sökväg",
   "890c34762a621a66": "Öppna överordnad tråd: {title}",
   "7514746d2bd43a1c": "Trådtitel",
   "ab42a6d2ab6073d9": "Trådåtgärder för {title}",
+  "b07114447756f116": "Working on",
+  "be629766c57e5bf1": "What is this thread working on?",
+  "935b57bfb14de080": "Working on: {workingOn}",
   "cd8fd5a47060164b": [
     "Ny tråd i ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "1dbf3c8f8996e12b": [
+    "Working on: ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -4832,6 +4846,7 @@
   "aa4fc5b9acda0f2e": "Utcheckningen byttes, men tråden kunde inte uppdateras",
   "eb2cc2e7c234d4fd": "Det gick inte att stoppa bakgrundsarbetet.",
   "a0aa3533b5a60cc4": "Den här tråden är inte längre tillgänglig",
+  "83c3eb702145c456": "Failed to dismiss",
   "9abc8144c24eb42b": "Snoozad, {remaining} kvar",
   "7df8fb644450d82e": "Snoozad",
   "e4fb59de91f77e5e": "Väcker...",
@@ -4840,6 +4855,8 @@
   "46057a7aacae5167": "Markerar som ej klar...",
   "55c0728ebb0b05b1": "Markera som ej klar",
   "fd4e45408394aac4": "Vaknade från snooze",
+  "916e170d364571f9": "Task looks done",
+  "13e6f2309e418404": "Settle",
   "e7f9e31365849b9f": "Den här leverantören stöder inte att konversationshistoriken återställs. Starta en ny tråd i stället.",
   "31db4cf2474ef2a6": "Återanslut {environment} innan du återställer kontrollpunkter.",
   "f7d2db726b3a9316": "Avbryt den aktuella omgången innan du återställer kontrollpunkter.",

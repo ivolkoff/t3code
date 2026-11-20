@@ -6,6 +6,7 @@ import {
   CommandId,
   ContextTransferId,
   EnvironmentId,
+  MessageId,
   NodeId,
   type OrchestrationV2Run,
   ProjectId,
@@ -231,6 +232,14 @@ const laptop = clientScope("laptop", true, "auto");
 const desk = clientScope("desk", true, "auto");
 const trusted = clientScope("trusted", true, "full-access");
 const claudeCode = clientScope("claude-code", false, "full-access");
+const threadScope = (threadId: ThreadId): McpInvocationContext.McpInvocationScope => ({
+  environmentId: EnvironmentId.make("environment:box"),
+  requestNamespace: `thread:${threadId}`,
+  thread: { threadId, providerSessionId: `session:${threadId}`, providerInstanceId: instanceId },
+  client: undefined,
+  capabilities: new Set(["orchestration", "worktree", "pull-requests"]),
+  issuedAt: 0,
+});
 
 const call = (
   scope: McpInvocationContext.McpInvocationScope,
@@ -421,6 +430,64 @@ it.layer(Layer.provideMerge(layerTools, layerOrchestration))("work a link starts
       ] as const) {
         const changed = yield* call(trusted, name, args);
         assert.equal(changed.isError, false, `${name}: ${JSON.stringify(changed.content)}`);
+      }
+    }),
+  );
+
+  it.effect("marks a working-on line done only when the thread's own agent clears it", () =>
+    Effect.gen(function* () {
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const own = yield* launch(claudeCode, "Own agent's thread");
+      const other = yield* launch(claudeCode, "Another thread");
+      // A thread caller needs a live run.
+      yield* Orchestrator.OrchestratorV2.pipe(
+        Effect.flatMap((orchestrator) =>
+          orchestrator.dispatch({
+            type: "message.dispatch",
+            commandId: CommandId.make("start:own-agent"),
+            threadId: own,
+            messageId: MessageId.make("message:own-agent"),
+            text: "Work on the login bug",
+            attachments: [],
+            dispatchMode: { type: "start_immediately" },
+            createdBy: "user",
+            creationSource: "web",
+          }),
+        ),
+      );
+      const setWorkingOn = (
+        scope: McpInvocationContext.McpInvocationScope,
+        threadId: ThreadId | undefined,
+        workingOn: string | null,
+      ) =>
+        call(scope, "t3_thread_update", {
+          ...(threadId === undefined ? {} : { threadId }),
+          action: "set_working_on",
+          workingOn,
+        }).pipe(
+          Effect.map((result) => {
+            assert.equal(result.isError, false, JSON.stringify(result.content));
+            return result.structuredContent as { workingOn: string | null };
+          }),
+        );
+
+      assert.equal(
+        (yield* setWorkingOn(threadScope(own), undefined, "Fix login #123")).workingOn,
+        "Fix login #123",
+      );
+      assert.equal((yield* projections.getThreadShell(own))?.workingOn, "Fix login #123");
+      assert.isNull((yield* setWorkingOn(threadScope(own), undefined, null)).workingOn);
+      const done = yield* projections.getThreadShell(own);
+      assert.isNull(done?.workingOn);
+      assert.isNotNull(done?.workingOnDoneAt);
+
+      // Another thread's agent, or an outside client such as the CLI, clears it without the mark.
+      for (const scope of [threadScope(own), claudeCode]) {
+        yield* setWorkingOn(claudeCode, other, "Other task");
+        yield* setWorkingOn(scope, other, null);
+        const cleared = yield* projections.getThreadShell(other);
+        assert.isNull(cleared?.workingOn);
+        assert.isNull(cleared?.workingOnDoneAt);
       }
     }),
   );

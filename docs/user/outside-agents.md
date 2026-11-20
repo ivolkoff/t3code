@@ -145,6 +145,7 @@ id=$(t3 thread start . "Find why the tests are slow")
 t3 thread send "$id" "Now fix it" --wait
 t3 thread show "$id"
 t3 thread list
+t3 thread working-on "$id" "Slow test suite"
 ```
 
 `.` means the project that contains the current folder, or a git worktree of
@@ -157,6 +158,8 @@ To choose the model, pass `--provider <instance-id> --model <slug>`. Add
 `--option id=value` for each model option, such as `--option effort=high`.
 Option ids and values depend on the model; `true` and `false` set on/off
 options.
+
+`working-on` sets the line shown with the thread's title; `--clear` removes it.
 
 `--wait` prints the agent's reply. It exits 1 when the run fails or stops, and
 2 when the agent waits for an answer you give in the app. Add `--json` for a
