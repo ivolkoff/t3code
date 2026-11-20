@@ -3,11 +3,13 @@ import {
   collectLimitAccounts,
   collectLimitPools,
   displayLimitWindows,
+  formatPaceReserve,
   type LimitAccount,
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
   paceRemainingPercent,
+  paceReservePercent,
   remainingPercent,
   type ResetCreditChoice,
 } from "@t3tools/shared/usageLimits";
@@ -123,7 +125,7 @@ function AccountName({
   );
 }
 
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+export function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3">
       <span className="text-muted-foreground">{label}</span>
@@ -151,7 +153,7 @@ function SegmentPopover({
   const gt = useGT();
   const m = useMessages();
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const reserve = paceReservePercent(window, now);
   const resetsIn = formatResetsIn(window, now, m, "in");
   const where =
     account.environments.length > 0
@@ -204,9 +206,7 @@ function SegmentPopover({
             {resetsIn ? ` · ${resetsIn}` : ""}
           </Row>
         ) : null}
-        {timeLeft !== null ? (
-          <Row label={gt("Even pace")}>{gt("{timeLeft}% left by now", { timeLeft })}</Row>
-        ) : null}
+        {reserve !== null ? <Row label={gt("Even pace")}>{formatPaceReserve(reserve)}</Row> : null}
         {reset && reset.restoresPercent > 0 ? (
           <Row label={gt("Restores", { $context: "a reset credit restores part of the pool" })}>
             {gt("+{percent}% of pool", { percent: reset.restoresPercent })}
