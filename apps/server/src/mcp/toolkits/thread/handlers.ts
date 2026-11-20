@@ -103,6 +103,7 @@ const required = <A>(value: A | undefined, name: string) =>
         }),
       )
     : Effect.succeed(value);
+const ACTIVE_RUN_STATUSES = new Set(["preparing", "starting", "running", "waiting"]);
 const writesThread = <P extends { readonly threadId?: ThreadId | undefined }, A, E, R>(
   handle: (params: P) => Effect.Effect<A, E, R>,
 ) => McpToolAccess.writesThreads((params: P) => [params.threadId], handle);
@@ -376,8 +377,22 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
   ),
   t3_thread_organize: writesThread((input) =>
     Effect.gen(function* () {
-      const { threads, projection, caller } = yield* readThread(input.threadId);
+      const { threads, projection, caller } = yield* readThread(input.threadId, ["runs"]);
       const common = { commandId: yield* newCommandId(), threadId: projection.thread.id };
+      if (input.action === "delete") {
+        if (caller?.id === projection.thread.id) {
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message: "A thread cannot delete itself. Archive or settle it instead.",
+          });
+        }
+        if (projection.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))) {
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message: "The thread has a running turn. Stop it before deleting.",
+          });
+        }
+      }
       if (input.action === "settle") {
         return yield* threads
           .settleThread({ ...common, byOwnAgent: caller?.id === projection.thread.id })
