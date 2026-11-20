@@ -364,14 +364,23 @@ export function ProposedPlanTimelineRow({
 
   return (
     <div className="min-w-0 px-1 py-0.5">
-      <ProposedPlanCard
-        planMarkdown={row.proposedPlan.planMarkdown}
-        environmentId={ctx.activeThreadEnvironmentId}
-        threadRef={ctx.threadRef ?? undefined}
-        cwd={ctx.markdownCwd}
-        workspaceRoot={ctx.workspaceRoot}
-        findActive={ctx.findActive}
-      />
+      {/* Plans have no message id; citations name their turn item instead. */}
+      <AssistantCitationSource
+        messageId={MessageId.make(row.id)}
+        {...(ctx.threadRef ? { threadRef: ctx.threadRef } : {})}
+        itemKey={row.id}
+        request={ctx.citationRequest}
+        listRef={ctx.listRef}
+      >
+        <ProposedPlanCard
+          planMarkdown={row.proposedPlan.planMarkdown}
+          environmentId={ctx.activeThreadEnvironmentId}
+          threadRef={ctx.threadRef ?? undefined}
+          cwd={ctx.markdownCwd}
+          workspaceRoot={ctx.workspaceRoot}
+          findActive={ctx.findActive}
+        />
+      </AssistantCitationSource>
     </div>
   );
 }
