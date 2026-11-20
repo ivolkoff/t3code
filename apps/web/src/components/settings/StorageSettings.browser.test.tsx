@@ -1,9 +1,9 @@
 import { act, fakeTimers, render, type Screen } from "../../../test/render";
+import { page, userEvent } from "vite-plus/test/browser";
 import { RegistryProvider } from "@effect/atom-react";
 import { DEFAULT_SERVER_SETTINGS, type StorageCleanupReport } from "@t3tools/contracts";
 import { type ReactNode } from "react";
 import { expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
 
@@ -49,6 +49,7 @@ vi.mock(import("./SettingsScopeContext"), async (original) => ({
             storageCleanup: true,
             storageCleanupRun: true,
             settledWorktreeCleanup: true,
+            settledThreadCleanup: true,
           },
         },
       },
@@ -57,7 +58,7 @@ vi.mock(import("./SettingsScopeContext"), async (original) => ({
       scope: { kind: "all" },
       environments,
       connectedEnvironments: environments,
-      targets: state.targets,
+      targets: state.targets.map((target) => ({ ...target, label: target.environmentId })),
       target: null,
     };
   }) as never,
@@ -108,6 +109,8 @@ function setup() {
       worktreeUnchanged: false,
       browserArtifactsAfterDays: null,
       logsAfterDays: null,
+      threadSettledAfterDays: null,
+      threadArchivedAfterDays: null,
     },
     projectSettingsOverrides: {},
   };
@@ -151,12 +154,113 @@ const deleteButton = (container: HTMLElement) =>
 
 it("keeps cleanup disabled when settled retention and all other rules are off", async () => {
   setup();
-  await using screen = await render(panel());
-  const button = deleteButton(screen.container);
+  {
+    await using screen = await render(panel());
+    const button = deleteButton(screen.container);
 
-  expect(button.disabled).toBe(true);
-  await act(async () => button.click());
-  expect(state.run).not.toHaveBeenCalled();
+    expect(button.disabled).toBe(true);
+    await act(async () => button.click());
+    expect(state.run).not.toHaveBeenCalled();
+  }
+
+  state.settings = {
+    ...state.settings,
+    storageCleanup: { ...state.settings.storageCleanup, threadSettledAfterDays: 30 },
+  };
+  state.targets = state.targets.map(({ environmentId }) => ({
+    environmentId,
+    settings: state.settings,
+  }));
+  await using enabled = await render(panel());
+  await vi.waitFor(() => expect(deleteButton(enabled.container).disabled).toBe(false));
+});
+
+// The backdrop covers the dialog's buttons for pointer clicks in the test page.
+const pressDialogButton = (name: string) =>
+  act(async () => {
+    [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')]
+      .find((button) => button.textContent === name)!
+      .click();
+  });
+
+const pickRetention = async (name: string, label = "Delete archived threads") => {
+  await userEvent.click(page.getByRole("combobox", { name: label }));
+  await userEvent.click(page.getByRole("option", { name }));
+};
+
+it("archives settled threads without asking", async () => {
+  setup();
+  await using _screen = await render(panel());
+
+  await pickRetention("30 days", "Archive settled threads");
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadSettledAfterDays: 30 } });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("asks before enabling archived thread deletion", async () => {
+  setup();
+  await using _screen = await render(panel());
+
+  await pickRetention("30 days");
+  await expect.element(page.getByText(/more than 30 days/)).toBeVisible();
+  expect(state.update).not.toHaveBeenCalled();
+  await pressDialogButton("Cancel");
+  expect(state.update).not.toHaveBeenCalled();
+
+  await pickRetention("30 days");
+  await pressDialogButton("Delete threads");
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadArchivedAfterDays: 30 } });
+});
+
+it("writes only a committed number from Custom…", async () => {
+  setup();
+  await using _screen = await render(panel());
+
+  await pickRetention("Custom…");
+  expect(state.update).not.toHaveBeenCalled();
+  const days = page.getByRole("textbox", { name: "Delete archived threads in days" });
+  await userEvent.type(days, "1{Tab}");
+  await expect.element(page.getByText(/more than 1 day on/)).toBeVisible();
+  await pressDialogButton("Cancel");
+  await expect.element(days).toHaveValue("");
+  await userEvent.type(days, "45{Tab}");
+  await expect.element(page.getByText(/more than 45 days/)).toBeVisible();
+  await pressDialogButton("Delete threads");
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadArchivedAfterDays: 45 } });
+});
+
+it("turns archived thread deletion off without asking", async () => {
+  setup();
+  state.settings = {
+    ...state.settings,
+    storageCleanup: { ...state.settings.storageCleanup, threadArchivedAfterDays: 30 },
+  };
+  state.targets = state.targets.map(({ environmentId }) => ({
+    environmentId,
+    settings: state.settings,
+  }));
+  await using _screen = await render(panel());
+
+  await pickRetention("Off");
+  expect(state.update).toHaveBeenCalledWith({ storageCleanup: { threadArchivedAfterDays: null } });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("asks when another machine would start deleting", async () => {
+  setup();
+  const withDays = (threadArchivedAfterDays: number | null) => ({
+    ...state.settings,
+    storageCleanup: { ...state.settings.storageCleanup, threadArchivedAfterDays },
+  });
+  state.targets = [
+    { environmentId: "env-a", settings: withDays(7) },
+    { environmentId: "env-b", settings: withDays(null) },
+  ];
+  state.settings = state.targets[0]!.settings;
+  await using _screen = await render(panel());
+
+  await pickRetention("14 days");
+  await expect.element(page.getByText(/on env-b/)).toBeVisible();
 });
 
 const rule = "Delete old browser artifacts";
