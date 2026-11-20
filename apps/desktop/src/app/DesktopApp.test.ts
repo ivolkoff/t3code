@@ -73,6 +73,7 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as MacPermissions from "../permissions/MacPermissions.ts";
+import * as BrowserSession from "../preview/BrowserSession.ts";
 import * as LoopbackTunnel from "../preview/LoopbackTunnel.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 
@@ -169,6 +170,10 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
         Effect.provideService(DesktopWindowToggleShortcut.DesktopWindowToggleShortcut, {
           initialize: Effect.void,
         } as DesktopWindowToggleShortcut.DesktopWindowToggleShortcut["Service"]),
+        Effect.provideService(
+          BrowserSession.BrowserSession,
+          {} as BrowserSession.BrowserSession["Service"],
+        ),
         Effect.provideService(DesktopState.DesktopState, {
           quitting,
         } as DesktopState.DesktopState["Service"]),

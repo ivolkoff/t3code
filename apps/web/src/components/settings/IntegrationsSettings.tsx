@@ -12,6 +12,9 @@ import {
   type BrowserProfile,
   BrowserSearchEngine,
   BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH,
+  BROWSER_USER_AGENT_MAX_LENGTH,
+  BrowserUserAgentPreset,
+  DEFAULT_BROWSER_USER_AGENT_PRESET,
   type EnvironmentId,
   BROWSER_PROFILE_NAME_MAX_LENGTH,
   BROWSER_RECORDING_FRAME_RATES,
@@ -825,6 +828,97 @@ function BrowserSearchEngineSetting() {
               maxLength={BROWSER_CUSTOM_SEARCH_URL_MAX_LENGTH}
               value={customUrl}
               onCommit={(next) => updateSettings({ browserCustomSearchUrl: next.trim() })}
+            />
+          }
+        />
+      ) : null}
+    </>
+  );
+}
+
+const USER_AGENT_PRESET_LABELS: Readonly<Record<BrowserUserAgentPreset, string>> = {
+  native: msg("Built-in", { $context: "browser user agent preset" }),
+  chrome: msg("Chrome (this system)"),
+  "chrome-macos": msg("Chrome on macOS"),
+  "chrome-windows": msg("Chrome on Windows"),
+  "chrome-linux": msg("Chrome on Linux"),
+  custom: msg("Custom", { $context: "custom user agent" }),
+};
+
+function BrowserUserAgentSetting({ disabled }: { readonly disabled: boolean }) {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
+  const m = useMessages();
+  const preset = useClientSettings((settings) => settings.browserUserAgentPreset);
+  const customUserAgent = useClientSettings((settings) => settings.browserUserAgent);
+  const updateSettings = useUpdatePrimarySettings();
+
+  return (
+    <>
+      <SettingsRow
+        {...searchableSetting("browser-user-agent")}
+        description={gt(
+          "What browser tabs report in requests and to page scripts. Chrome presets follow the built-in engine version across updates. Cloudflare Turnstile may reject anything but Built-in.",
+        )}
+        resetAction={
+          preset !== DEFAULT_BROWSER_USER_AGENT_PRESET || customUserAgent !== "" ? (
+            <SettingResetButton
+              ariaLabel={gt("Reset user agent to default")}
+              onClick={() =>
+                updateSettings({
+                  browserUserAgentPreset: DEFAULT_BROWSER_USER_AGENT_PRESET,
+                  browserUserAgent: "",
+                })
+              }
+            />
+          ) : null
+        }
+        control={
+          <Select
+            value={preset}
+            disabled={disabled}
+            onValueChange={(value) => {
+              const next = BrowserUserAgentPreset.literals.find((literal) => literal === value);
+              if (next !== undefined) {
+                updateSettings({ browserUserAgentPreset: next });
+              }
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full sm:w-48" aria-label={gt("User agent")}>
+              <SelectValue>{m(USER_AGENT_PRESET_LABELS[preset])}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              {BrowserUserAgentPreset.literals.map((literal) => (
+                <SelectItem hideIndicator key={literal} value={literal}>
+                  {m(USER_AGENT_PRESET_LABELS[literal])}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        }
+      />
+      {preset === "custom" ? (
+        <SettingsRow
+          title={gt("Custom user agent")}
+          description={gt(
+            "Use {placeholder} where the Chrome major version goes. Empty keeps the built-in one.",
+            // oxlint-disable-next-line t3code/no-untranslated-copy -- literal template token
+            { placeholder: "{chrome}" },
+          )}
+          control={
+            <DraftInput
+              nativeInput
+              size="sm"
+              className="w-full sm:w-64"
+              aria-label={gt("Custom user agent")}
+              // oxlint-disable-next-line t3code/no-untranslated-copy -- example User-Agent header value
+              placeholder="Mozilla/5.0 … Chrome/{chrome}.0.0.0 Safari/537.36"
+              autoCapitalize="none"
+              spellCheck={false}
+              disabled={disabled}
+              maxLength={BROWSER_USER_AGENT_MAX_LENGTH}
+              value={customUserAgent}
+              onCommit={(next) => updateSettings({ browserUserAgent: next.trim() })}
             />
           }
         />
@@ -1701,6 +1795,7 @@ export function BrowserSettingsPanel() {
           <BrowserProfilesSetting disabled={desktopOnly} />
           <BrowserLinkTargetSetting disabled={desktopOnly} />
           <BrowserAutoShowFloatingPreviewSetting disabled={desktopOnly} />
+          <BrowserUserAgentSetting disabled={desktopOnly} />
         </SettingsUnavailableGroup>
         {/* Not desktop-only: web clients search from server-run browser tabs too. */}
         <BrowserSearchEngineSetting />

@@ -126,6 +126,8 @@ export type BrowserDefaultSettings = Pick<
   | "browserLinkTarget"
   | "browserSearchEngine"
   | "browserCustomSearchUrl"
+  | "browserUserAgentPreset"
+  | "browserUserAgent"
   | "browserAutoShowFloatingPreview"
   | "pullRequestLinksOpenInApp"
 >;
@@ -170,6 +172,10 @@ export function getChangedBrowserSettingLabels(
     ...(settings.browserSearchEngine !== DEFAULT_UNIFIED_SETTINGS.browserSearchEngine ||
     settings.browserCustomSearchUrl !== DEFAULT_UNIFIED_SETTINGS.browserCustomSearchUrl
       ? [resolve(msg("Search engine"))]
+      : []),
+    ...(settings.browserUserAgentPreset !== DEFAULT_UNIFIED_SETTINGS.browserUserAgentPreset ||
+    settings.browserUserAgent !== DEFAULT_UNIFIED_SETTINGS.browserUserAgent
+      ? [resolve(msg("User agent"))]
       : []),
     ...(settings.browserAutoShowFloatingPreview !==
     DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview

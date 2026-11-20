@@ -1,6 +1,6 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import type { Certificate, Session, WebContents } from "electron";
-import { BrowserWindow, session } from "electron";
+import { BrowserWindow, session, webContents as electronWebContents } from "electron";
 import { msg } from "gt-i18n";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Hex from "effect/encoding/Hex";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Result from "effect/Result";
@@ -19,6 +20,16 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import { m } from "../i18n/messages.ts";
+import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
+import {
+  clientHintHeaders,
+  type PreviewDeviceEmulation,
+  type PreviewUserAgentMetadata,
+  type PreviewUserAgentSettings,
+  resolvePreviewDeviceEmulation,
+  resolvePreviewUserAgent,
+  resolvePreviewUserAgentMetadata,
+} from "./previewUserAgent.ts";
 
 const PREVIEW_PARTITION_PREFIX = "persist:t3code-preview-";
 /** Ephemeral partitions omit persist: but retain a product prefix so the webview gate recognizes them. */
@@ -65,13 +76,15 @@ const externalProtocolPromptUrl = (rawUrl: string | undefined): string | null =>
 
 // These hosts refuse or degrade on the app and Electron User-Agent tokens (Teams error page, Entra hides
 // passkeys, WhatsApp "use Chrome"). Rewriting it everywhere breaks Turnstile. Electron allows one listener per session.
-const CHROME_USER_AGENT_URL_PATTERNS = [
-  "https://teams.cloud.microsoft/*",
-  "https://teams.microsoft.com/*",
-  "https://login.microsoftonline.com/*",
-  "https://login.live.com/*",
-  "https://web.whatsapp.com/*",
+const CHROME_ONLY_URL_PREFIXES = [
+  "https://teams.cloud.microsoft/",
+  "https://teams.microsoft.com/",
+  "https://login.microsoftonline.com/",
+  "https://login.live.com/",
+  "https://web.whatsapp.com/",
 ];
+const isChromeOnlyUrl = (url: string) =>
+  CHROME_ONLY_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
 const APP_USER_AGENT_TOKENS = / (?:T3Code\S*|Electron)\/\S+/g;
 
 const MAX_PROMPT_URL_LENGTH = 300;
@@ -235,6 +248,22 @@ export class BrowserSession extends Context.Service<
     readonly clearCache: (
       partitions?: ReadonlyArray<string>,
     ) => Effect.Effect<void, BrowserSessionCacheClearError>;
+    /** Open tabs send the resolved User-Agent from their next request. */
+    readonly setUserAgent: (settings: PreviewUserAgentSettings) => Effect.Effect<void>;
+    /** Client Hints for the current Chrome preset; null when the preset has none. */
+    readonly userAgentMetadata: Effect.Effect<{
+      readonly userAgent: string;
+      readonly metadata: PreviewUserAgentMetadata;
+    } | null>;
+    /** Requests from this guest carry the preset device's identity until it is set to null. */
+    readonly emulateDevice: (
+      webContentsId: number,
+      presetId: string | null,
+    ) => Effect.Effect<PreviewDeviceEmulation | null>;
+    /** The guest's latest document request and the preset it went out with; undefined before the first. */
+    readonly documentDevice: (
+      webContentsId: number,
+    ) => Effect.Effect<{ readonly url: string; readonly presetId: string | null } | undefined>;
   }
 >()("@t3tools/desktop/preview/BrowserSession") {}
 
@@ -583,6 +612,39 @@ export const make = Effect.gen(function* BrowserSessionMake() {
   });
 
   const sessionsRef = yield* SynchronizedRef.make<ReadonlyMap<string, Session>>(new Map());
+  // Turnstile rejects rewritten User-Agents, so the override is opt-in through client settings.
+  const engine = {
+    chromeVersion: process.versions.chrome ?? "",
+    platform: yield* HostProcess.Platform,
+    arch: yield* HostProcess.Architecture,
+    systemVersion: process.getSystemVersion?.() ?? "",
+  };
+  const clientSettings = yield* Effect.serviceOption(DesktopClientSettings.DesktopClientSettings);
+  const initialSettings = yield* Option.match(clientSettings, {
+    onNone: () => Effect.succeedNone,
+    onSome: (store) => store.get.pipe(Effect.orElseSucceed(() => Option.none())),
+  });
+  let userAgentOverride = Option.match(initialSettings, {
+    onNone: () => "",
+    onSome: (settings) => resolvePreviewUserAgent(settings, engine),
+  });
+  let userAgentMetadata = Option.match(initialSettings, {
+    onNone: () => null,
+    onSome: (settings) => resolvePreviewUserAgentMetadata(settings, engine),
+  });
+  const nativeUserAgents = new WeakMap<Session, string>();
+  const deviceEmulations = new Map<number, PreviewDeviceEmulation>();
+  const documentDevices = new Map<number, { url: string; presetId: string | null }>();
+  const applyUserAgent = (browserSession: Session): void => {
+    const userAgent = userAgentOverride || nativeUserAgents.get(browserSession);
+    if (userAgent === undefined) return;
+    browserSession.setUserAgent(userAgent);
+    for (const contents of electronWebContents.getAllWebContents()) {
+      if (contents.session === browserSession && !contents.isDestroyed()) {
+        contents.setUserAgent(userAgent);
+      }
+    }
+  };
 
   const getPartition = Effect.fn("BrowserSession.getPartition")(function* (
     scope = "shared",
@@ -614,6 +676,8 @@ export const make = Effect.gen(function* BrowserSessionMake() {
       return Effect.try({
         try: () => {
           const browserSession = session.fromPartition(partition);
+          nativeUserAgents.set(browserSession, browserSession.getUserAgent());
+          if (userAgentOverride) applyUserAgent(browserSession);
           // Location and clipboard decisions are remembered separately for each origin.
           const permissionDecisions = {
             "clipboard-read": new Map<string, boolean>(),
@@ -689,22 +753,49 @@ export const make = Effect.gen(function* BrowserSessionMake() {
               : ALLOWED_PREVIEW_PERMISSIONS.has(permission),
           );
           browserSession.webRequest.onBeforeSendHeaders(
-            { urls: CHROME_USER_AGENT_URL_PATTERNS },
-            ({ requestHeaders }, callback) => {
-              const userAgent = Object.entries(requestHeaders).find(
-                ([name]) => name.toLowerCase() === "user-agent",
-              );
-              if (userAgent === undefined) {
-                callback({});
-                return;
+            ({ url, requestHeaders, webContentsId, resourceType }, callback) => {
+              const headers = { ...requestHeaders };
+              const headerName = (wanted: string) =>
+                Object.keys(headers).find((name) => name.toLowerCase() === wanted);
+              let changed = false;
+              const userAgentHeader = headerName("user-agent");
+              if (userAgentHeader !== undefined && isChromeOnlyUrl(url)) {
+                headers[userAgentHeader] = headers[userAgentHeader]!.replace(
+                  APP_USER_AGENT_TOKENS,
+                  "",
+                );
+                changed = true;
               }
-              const [name, value] = userAgent;
-              callback({
-                requestHeaders: {
-                  ...requestHeaders,
-                  [name]: value.replace(APP_USER_AGENT_TOKENS, ""),
-                },
-              });
+              // Navigations take the session User-Agent, which carries no Client Hints.
+              if (
+                userAgentMetadata !== null &&
+                url.startsWith("https://") &&
+                headerName("sec-ch-ua") === undefined
+              ) {
+                Object.assign(headers, clientHintHeaders(userAgentMetadata));
+                changed = true;
+              }
+              // Electron adds no Client Hints to navigations, and the guest's emulation reaches only its own requests.
+              const device =
+                webContentsId === undefined ? undefined : deviceEmulations.get(webContentsId);
+              if (device !== undefined) {
+                headers[headerName("user-agent") ?? "User-Agent"] = device.userAgent;
+                if (url.startsWith("https://")) {
+                  for (const [name, value] of Object.entries(clientHintHeaders(device.metadata))) {
+                    headers[headerName(name) ?? name] = value;
+                  }
+                }
+                changed = true;
+              }
+              if (webContentsId !== undefined && resourceType === "mainFrame") {
+                if (!documentDevices.has(webContentsId)) {
+                  electronWebContents
+                    .fromId(webContentsId)
+                    ?.once("destroyed", () => documentDevices.delete(webContentsId));
+                }
+                documentDevices.set(webContentsId, { url, presetId: device?.presetId ?? null });
+              }
+              callback(changed ? { requestHeaders: headers } : {});
             },
           );
           return browserSession;
@@ -787,6 +878,28 @@ export const make = Effect.gen(function* BrowserSessionMake() {
           }),
         { concurrency: "unbounded", discard: true },
       );
+    }),
+    userAgentMetadata: Effect.sync(() =>
+      userAgentMetadata === null
+        ? null
+        : { userAgent: userAgentOverride, metadata: userAgentMetadata },
+    ),
+    emulateDevice: Effect.fn("BrowserSession.emulateDevice")(function* (webContentsId, presetId) {
+      const emulation = resolvePreviewDeviceEmulation(presetId, engine);
+      if (emulation === null) deviceEmulations.delete(webContentsId);
+      else deviceEmulations.set(webContentsId, emulation);
+      return emulation;
+    }),
+    documentDevice: Effect.fn("BrowserSession.documentDevice")(function* (webContentsId) {
+      return documentDevices.get(webContentsId);
+    }),
+    setUserAgent: Effect.fn("BrowserSession.setUserAgent")(function* (settings) {
+      userAgentMetadata = resolvePreviewUserAgentMetadata(settings, engine);
+      const next = resolvePreviewUserAgent(settings, engine);
+      if (next === userAgentOverride) return;
+      userAgentOverride = next;
+      const sessions = yield* SynchronizedRef.get(sessionsRef);
+      for (const browserSession of sessions.values()) applyUserAgent(browserSession);
     }),
   });
 }).pipe(Effect.withSpan("BrowserSession.make"));
