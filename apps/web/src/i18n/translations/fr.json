@@ -8355,6 +8355,18 @@
   "191fa21f1cfda1ef": "L’hôte a refusé la connexion de cet appareil. Appairez à nouveau cette adresse avec Ajouter une route.",
   "219bc3612d646a01": "Supprimer la route",
   "b2877341429675aa": "via {route}",
+  "a541ba1750d6dd57": "{ms} ms",
+  "baeb1c8065063f13": "{seconds} s",
+  "fb1685431ea27749": "Timed out after 30 s",
+  "98ee035a8cb24b86": "Failed to start",
+  "e9469d403c5ce11e": "Killed",
+  "073e1b90fb802c56": "exit {code}",
+  "cabdbaed9836aca7": "Test",
+  "1e0dd6567667c6a4": "Turn started",
+  "59631dd46721c53f": "Turn completed",
+  "46e80e56b9404bbd": "Turn failed",
+  "e73c694af94409ae": "Event hooks",
+  "6413575aed2b2294": "Choose one environment to configure its event hooks.",
   "70bae47e93a2f207": "Afficher l’erreur complète",
   "e4099af6d85770ff": "« {font} » n’est pas à chasse fixe",
   "a8448493d83279e2": "Le code et le terminal nécessitent une police à chasse fixe, la police actuelle a donc été conservée.",
@@ -10833,6 +10845,41 @@
   "ecaa5a9da2c44a47": "Choisissez un environnement pour configurer ses exports de télémétrie.",
   "5548e6d2e9b8cc64": "Enregistré. Redémarrez le serveur pour appliquer.",
   "23029f9ce3382536": "Cette connexion n’est pas autorisée à modifier les paramètres sur {environment}.",
+  "3621e70968894f3e": "Event for hook {number}",
+  "d17bf9c1a5ef0541": "Command for hook {number}",
+  "ce83bf7391935985": "Enable hook {number}",
+  "ab6b806a25a8c6bf": "Testing…",
+  "7503ee1812fa279f": "Test",
+  "8900959316b7e4c7": "Remove hook {number}",
+  "3f5636e095cddf39": "Show output",
+  "179e6a64729c0ce4": "Add hook",
+  "bf5602410d695db3": "Discard",
+  "4422fba78348d485": [
+    "Run a shell command on ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " when a thread starts, finishes, fails, or needs approval or input. The event arrives as JSON on stdin and",
+    " ",
+    {
+      "t": "code",
+      "i": 2,
+      "c": "T3_*"
+    },
+    " variables."
+  ],
+  "a2aa929b4c23ea4f": [
+    "Run a shell command on this environment when a thread starts, finishes, fails, or needs approval or input. The event arrives as JSON on stdin and",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "T3_*"
+    },
+    " variables."
+  ],
   "a5f1fe10ef6373fd": "Saisissez un point de terminaison HTTP ou HTTPS, ou laissez vide pour désactiver l’export.",
   "5b928a84a624e831": "En cours : {url}",
   "b07718fe86a16cc6": "Exécution : désactivée",
@@ -11602,6 +11649,7 @@
   "df9fa3a9cb004b9b": "prise en main configuration premier lancement démarrer agents importer projets",
   "3188bc3b3c4508bc": "Politique de confidentialité",
   "901a823214edc8c4": "télémétrie analytique données d’utilisation suivi mentions légales refuser",
+  "4eb28f0db0d51002": "hook webhook script command notify shell automation",
   "82136480255a5106": "OTel OTLP télémétrie export points de terminaison journaux traces métriques Grafana",
   "659d081051faf7ff": "journaux traces processus historique des ressources échecs spans cpu mémoire",
   "f537f91e1ee41d47": "raccourcis clavier touches commandes associations json",

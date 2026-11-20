@@ -8372,6 +8372,18 @@
   "191fa21f1cfda1ef": "主机拒绝了此设备的登录。请通过“添加线路”重新配对此地址。",
   "219bc3612d646a01": "移除线路",
   "b2877341429675aa": "通过 {route}",
+  "a541ba1750d6dd57": "{ms} ms",
+  "baeb1c8065063f13": "{seconds} s",
+  "fb1685431ea27749": "Timed out after 30 s",
+  "98ee035a8cb24b86": "Failed to start",
+  "e9469d403c5ce11e": "Killed",
+  "073e1b90fb802c56": "exit {code}",
+  "cabdbaed9836aca7": "Test",
+  "1e0dd6567667c6a4": "Turn started",
+  "59631dd46721c53f": "Turn completed",
+  "46e80e56b9404bbd": "Turn failed",
+  "e73c694af94409ae": "Event hooks",
+  "6413575aed2b2294": "Choose one environment to configure its event hooks.",
   "70bae47e93a2f207": "显示完整错误",
   "e4099af6d85770ff": "“{font}”不是等宽字体",
   "a8448493d83279e2": "代码和终端需要等宽字体，已保留当前字体。",
@@ -10854,6 +10866,41 @@
   "ecaa5a9da2c44a47": "选择一个环境来配置遥测导出。",
   "5548e6d2e9b8cc64": "已保存。重启服务器后生效。",
   "23029f9ce3382536": "此连接没有权限更改 {environment} 的设置。",
+  "3621e70968894f3e": "Event for hook {number}",
+  "d17bf9c1a5ef0541": "Command for hook {number}",
+  "ce83bf7391935985": "Enable hook {number}",
+  "ab6b806a25a8c6bf": "Testing…",
+  "7503ee1812fa279f": "Test",
+  "8900959316b7e4c7": "Remove hook {number}",
+  "3f5636e095cddf39": "Show output",
+  "179e6a64729c0ce4": "Add hook",
+  "bf5602410d695db3": "Discard",
+  "4422fba78348d485": [
+    "Run a shell command on ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " when a thread starts, finishes, fails, or needs approval or input. The event arrives as JSON on stdin and",
+    " ",
+    {
+      "t": "code",
+      "i": 2,
+      "c": "T3_*"
+    },
+    " variables."
+  ],
+  "a2aa929b4c23ea4f": [
+    "Run a shell command on this environment when a thread starts, finishes, fails, or needs approval or input. The event arrives as JSON on stdin and",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "T3_*"
+    },
+    " variables."
+  ],
   "a5f1fe10ef6373fd": "输入 HTTP 或 HTTPS 端点，留空则停用导出。",
   "5b928a84a624e831": "运行中：{url}",
   "b07718fe86a16cc6": "运行：已停用",
@@ -11626,6 +11673,7 @@
   "df9fa3a9cb004b9b": "引导 设置 首次运行 入门 智能体 导入 项目",
   "3188bc3b3c4508bc": "隐私政策",
   "901a823214edc8c4": "遥测 分析 用量数据 跟踪 法律 退出",
+  "4eb28f0db0d51002": "hook webhook script command notify shell automation",
   "82136480255a5106": "OTel OTLP 遥测 导出 端点 日志 追踪 指标 Grafana",
   "659d081051faf7ff": "日志 追踪 进程 资源历史 失败 span cpu 内存",
   "f537f91e1ee41d47": "键盘 快捷键 热键 命令 绑定 json",
