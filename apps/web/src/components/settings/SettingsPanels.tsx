@@ -778,6 +778,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       browserLinkTarget: DEFAULT_UNIFIED_SETTINGS.browserLinkTarget,
       browserSearchEngine: DEFAULT_UNIFIED_SETTINGS.browserSearchEngine,
       browserCustomSearchUrl: DEFAULT_UNIFIED_SETTINGS.browserCustomSearchUrl,
+      browserUserAgentPreset: DEFAULT_UNIFIED_SETTINGS.browserUserAgentPreset,
+      browserUserAgent: DEFAULT_UNIFIED_SETTINGS.browserUserAgent,
       browserAutoShowFloatingPreview: DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
       pullRequestLinksOpenInApp: DEFAULT_UNIFIED_SETTINGS.pullRequestLinksOpenInApp,
       enableAgentBrowserAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess,
