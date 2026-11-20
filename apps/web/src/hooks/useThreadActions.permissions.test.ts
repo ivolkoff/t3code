@@ -456,6 +456,19 @@ describe("thread action permissions", () => {
     ]);
   });
 
+  it("keeps an orphaned worktree without asking when a bulk delete opts out of the question", async () => {
+    state.scopes
+      .get(secondary)!
+      .add(AuthOrchestrationOperateScope)
+      .add(AuthSourceControlWriteScope);
+    state.threads[0]!.worktreePath = "/worktrees/thread";
+    expect((await useThreadActions().deleteThread(target, { askAboutWorktree: false }))._tag).toBe(
+      "Success",
+    );
+    expect(state.confirm).not.toHaveBeenCalled();
+    expect(state.requests.map((request) => request.action)).toEqual(["stopSession", "delete"]);
+  });
+
   it("clears the drafts of the side chats deleted with it", async () => {
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     const parent = state.threads[0]!;
