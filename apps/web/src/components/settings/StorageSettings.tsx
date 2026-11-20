@@ -23,6 +23,15 @@ import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { m, type MessageResolver } from "../../i18n/messages";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -266,6 +275,158 @@ function RetentionControl({
   );
 }
 
+const THREAD_RETENTION_PRESETS = [7, 14, 30, 90];
+
+function ThreadRetentionSelect({
+  label,
+  setting,
+  value,
+  onChange,
+  targets,
+}: {
+  label: string;
+  setting: "threadSettledAfterDays" | "threadArchivedAfterDays";
+  value: number | null;
+  onChange: (value: number | null) => void;
+  targets: readonly ScopedSettingsTarget[];
+}) {
+  const gt = useGT();
+  const [custom, setCustom] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [pending, setPending] = useState<number | null>(null);
+  const [savedValue, setSavedValue] = useState(value);
+  if (savedValue !== value) {
+    setSavedValue(value);
+    setDraft(value);
+  }
+  const showCustom = custom || (value !== null && !THREAD_RETENTION_PRESETS.includes(value));
+  const selected = showCustom ? "custom" : value === null ? "off" : String(value);
+  const affected = (days: number) =>
+    targets.filter((target) => {
+      const current = target.settings.storageCleanup[setting];
+      return current === null || current > days;
+    });
+  const request = (days: number | null) => {
+    // Only deletion is irreversible; archiving can be undone.
+    if (days === null || setting === "threadSettledAfterDays") onChange(days);
+    else if (affected(days).length > 0) setPending(days);
+    else onChange(days);
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {showCustom && (
+        <NumberField
+          value={draft}
+          min={1}
+          max={3650}
+          step={1}
+          size="sm"
+          className="w-auto"
+          onValueChange={setDraft}
+          onValueCommitted={(next) => {
+            if (next === null) setDraft(value);
+            else {
+              const days = Math.min(3650, Math.max(1, Math.round(next)));
+              setDraft(days);
+              request(days);
+            }
+          }}
+        >
+          <NumberFieldGroup>
+            <NumberFieldDecrement aria-label={gt("Decrease {label}", { label })} />
+            <NumberFieldInput
+              aria-label={gt("{label} in days", { label })}
+              size={5}
+              className="w-auto grow-0 text-right"
+            />
+            <span aria-hidden="true" className="self-center pr-2 text-xs">
+              days
+            </span>
+            <NumberFieldIncrement aria-label={gt("Increase {label}", { label })} />
+          </NumberFieldGroup>
+        </NumberField>
+      )}
+      <Select
+        value={selected}
+        onValueChange={(next) => {
+          if (next === "custom") setCustom(true);
+          else {
+            setCustom(false);
+            request(next === "off" ? null : Number(next));
+          }
+        }}
+      >
+        <SelectTrigger size="sm" aria-label={label}>
+          <SelectValue>
+            {showCustom
+              ? gt("Custom…")
+              : value === null
+                ? gt("Off")
+                : gt("{count, plural, one {{count} day} other {{count} days}}", { count: value })}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup align="end" alignItemWithTrigger={false}>
+          <SelectItem value="off">
+            <T>Off</T>
+          </SelectItem>
+          {THREAD_RETENTION_PRESETS.map((days) => (
+            <SelectItem key={days} value={String(days)}>
+              {gt("{count, plural, one {{count} day} other {{count} days}}", { count: days })}
+            </SelectItem>
+          ))}
+          <SelectItem value="custom">
+            <T>Custom…</T>
+          </SelectItem>
+        </SelectPopup>
+      </Select>
+      <AlertDialog
+        open={pending !== null}
+        onOpenChange={(open) => {
+          if (open) return;
+          setPending(null);
+          setDraft(value);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              <T>Delete archived threads?</T>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {gt(
+                "Threads archived for more than {count, plural, one {{count} day} other {{count} days}} on {targets} will be permanently deleted with their worktrees, now and at every hourly cleanup. A thread whose worktree has uncommitted changes is kept.",
+                {
+                  count: pending ?? 0,
+                  targets:
+                    pending === null
+                      ? ""
+                      : affected(pending)
+                          .map((target) => target.label)
+                          .join(", "),
+                },
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              <T>Cancel</T>
+            </AlertDialogClose>
+            <Button
+              onClick={() => {
+                if (pending !== null) onChange(pending);
+                setPending(null);
+              }}
+            >
+              <T>Delete threads</T>
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </div>
+  );
+}
+
 const KEEP_WHEN_LABELS = {
   "any-local-files": msg("Any local files"),
   "uncommitted-changes": msg("Uncommitted changes"),
@@ -304,7 +465,9 @@ function CleanupResults({
                 : entry.path?.split(/[\\/]/).findLast(Boolean)) ?? gt("Worktrees"))
             : entry.kind === "logs"
               ? gt("Rotated logs")
-              : gt("Browser artifacts");
+              : entry.kind === "thread"
+                ? (entry.threadTitle ?? gt("Thread"))
+                : gt("Browser artifacts");
         return (
           <SettingsRow
             key={`${entry.path ?? entry.kind}:${entry.threadId ?? index}`}
@@ -436,6 +599,8 @@ function CleanupSection() {
     return (
       settings.storageCleanup.browserArtifactsAfterDays !== null ||
       settings.storageCleanup.logsAfterDays !== null ||
+      settings.storageCleanup.threadSettledAfterDays !== null ||
+      settings.storageCleanup.threadArchivedAfterDays !== null ||
       enabled(resolveWorktreeCleanup(settings, null)) ||
       Object.values(settings.projectSettingsOverrides).some(
         (override) =>
@@ -893,6 +1058,11 @@ export function StorageCleanupSections() {
     );
   const settledArtifactsStatus = useDebouncedValue(`${targetIdsKey}:${artifactsMixed}`, 300);
   const settledLogsStatus = useDebouncedValue(`${targetIdsKey}:${logsMixed}`, 300);
+  const threadsStatus = (setting: "threadSettledAfterDays" | "threadArchivedAfterDays") =>
+    targets.length > 1 &&
+    targets.some((target) => target.settings.storageCleanup[setting] !== settings[setting])
+      ? gt("Mixed across selected machines")
+      : undefined;
   const artifactsStatus =
     targets.length > 1 && settledArtifactsStatus === `${targetIdsKey}:true`
       ? gt("Mixed across selected machines")
@@ -965,6 +1135,53 @@ export function StorageCleanupSections() {
             }
           />
         </AnimatedHeight>
+        {connectedEnvironments.every(
+          (environment) =>
+            environment.serverConfig?.environment.capabilities.settledThreadCleanup === true,
+        ) && (
+          <AnimatedHeight>
+            <SettingsRow
+              title={gt("Archive settled threads")}
+              status={threadsStatus("threadSettledAfterDays")}
+              managedPaths={["storageCleanup.threadSettledAfterDays"]}
+              description={gt(
+                "Move threads to the archive this many days after they settle and go untouched. A scheduled task keeps its thread out. Unarchive a thread to bring it back.",
+              )}
+              serverScoped
+              control={
+                <ThreadRetentionSelect
+                  label={gt("Archive settled threads")}
+                  setting="threadSettledAfterDays"
+                  value={settings.threadSettledAfterDays}
+                  targets={targets}
+                  onChange={(threadSettledAfterDays) =>
+                    updateSettings({ storageCleanup: { threadSettledAfterDays } })
+                  }
+                />
+              }
+            />
+            <SettingsRow
+              title={gt("Delete archived threads")}
+              status={threadsStatus("threadArchivedAfterDays")}
+              managedPaths={["storageCleanup.threadArchivedAfterDays"]}
+              description={gt(
+                "Permanently delete archived threads, including ones you archived, and their worktrees this many days after archive or last open. Uncommitted changes or a scheduled task keep a thread.",
+              )}
+              serverScoped
+              control={
+                <ThreadRetentionSelect
+                  label={gt("Delete archived threads")}
+                  setting="threadArchivedAfterDays"
+                  value={settings.threadArchivedAfterDays}
+                  targets={targets}
+                  onChange={(threadArchivedAfterDays) =>
+                    updateSettings({ storageCleanup: { threadArchivedAfterDays } })
+                  }
+                />
+              }
+            />
+          </AnimatedHeight>
+        )}
       </SettingsSection>
       <CleanupSection />
     </>

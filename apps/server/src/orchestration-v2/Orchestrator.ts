@@ -76,6 +76,7 @@ import {
   type ProviderSessionId,
   RunId,
   RuntimeMode,
+  settledThreadLastActivityMs,
   ThreadLinkedPullRequest,
   ThreadId,
   TurnItemId,
@@ -15505,6 +15506,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             }),
           );
         });
+        // Rechecked under the thread lock: any change since the sweep's cutoff keeps the thread.
+        if (command.archivedBefore !== undefined) {
+          const thread = yield* projectionStore
+            .getThread(command.threadId)
+            .pipe(
+              Effect.mapError(
+                (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+              ),
+            );
+          if (
+            thread.archivedAt === null ||
+            thread.deletedAt !== null ||
+            settledThreadLastActivityMs(thread) > DateTime.toEpochMillis(command.archivedBefore)
+          ) {
+            return { events: [], effects: [] };
+          }
+        }
         // Checked under the thread lock: a message sent since the client looked keeps the thread.
         if (command.onlyIfUnused === true) {
           const usage = yield* projectionStore
@@ -15536,6 +15554,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       }
       case "thread.archive":
       case "thread.unarchive": {
+        // Rechecked under the thread lock: any change since the sweep's cutoff keeps the thread.
+        if (command.type === "thread.archive" && command.settledBefore !== undefined) {
+          const thread = yield* projectionStore
+            .getThread(command.threadId)
+            .pipe(
+              Effect.mapError(
+                (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+              ),
+            );
+          if (
+            thread.settledOverride !== "settled" ||
+            thread.archivedAt !== null ||
+            thread.deletedAt !== null ||
+            settledThreadLastActivityMs(thread) > DateTime.toEpochMillis(command.settledBefore)
+          ) {
+            return { events: [], effects: [] };
+          }
+        }
         const parentArchivedAt = (yield* findThread(command.threadId))?.archivedAt ?? null;
         yield* dispatchThreadMutation(command, events, effects);
         // Unarchive restores the side chats this parent's archive took, not ones archived before it.
@@ -15985,7 +16021,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           command.type === "subagent.stop" ||
           // Closing a share again, or after it ended, is not an error.
           command.type === "thread.guest-share.close" ||
-          (command.type === "thread.delete" && command.onlyIfUnused === true),
+          (command.type === "thread.delete" &&
+            (command.onlyIfUnused === true || command.archivedBefore !== undefined)) ||
+          (command.type === "thread.archive" && command.settledBefore !== undefined),
         (_planned) =>
           new OrchestratorDispatchError({
             commandId: command.commandId,
