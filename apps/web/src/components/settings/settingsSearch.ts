@@ -970,6 +970,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("telemetry analytics usage data tracking legal opt out")],
   },
   {
+    id: "event-hooks",
+    title: "Event hooks",
+    to: "/settings/threads",
+    targetId: "event-hooks",
+    scope: "environment",
+    searchTerms: ["hook webhook script command notify shell automation"],
+  },
+  {
     id: "telemetry-export",
     title: msg("OpenTelemetry export"),
     to: "/settings/diagnostics",

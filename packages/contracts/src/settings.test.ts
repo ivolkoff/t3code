@@ -169,6 +169,15 @@ it("drops a hand-edited non-string hidden tag and keeps the rest of the settings
   expect(settings.hideTaggedThreads).toBe(true);
 });
 
+it("drops a hand-edited bad event hook and keeps the others", () => {
+  const hook = { id: "h1", event: "turn.completed", command: "say done", enabled: true };
+  const settings = decodeServerSettings({
+    eventHooks: [hook, { ...hook, id: "h2", event: "nope" }, { ...hook, id: "h3", command: 1 }],
+  });
+  expect(settings.eventHooks).toEqual([hook]);
+  expect(decodeServerSettings({}).eventHooks).toEqual([]);
+});
+
 describe("ServerSettings secret providers", () => {
   const onePassword = (account: string) => ({
     kind: "one_password",
