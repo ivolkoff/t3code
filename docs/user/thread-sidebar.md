@@ -46,6 +46,20 @@ moves and the agent keeps working in the same place. Other threads in that folde
 move with it. Rename the project in its settings, and use **Initialize Git** to
 get branch and diff controls.
 
+### Continue a terminal conversation
+
+On web and desktop, right-click a project in the sidebar and choose **Import CLI
+conversation…**, or use **Import CLI conversation into…** in the command palette.
+It lists the Claude Code, Codex and Pi conversations that ran in the project's
+folder on its machine, newest first. Pick one to import it as a thread, or
+**Open** one already in T3 Code.
+
+The thread keeps up to 200 messages of text, without tool activity or
+attachments. Your next message continues the same conversation in that agent.
+On that first message T3 Code also sends a copy of the imported history once.
+The original transcript is not changed. A conversation whose thread you deleted
+cannot be imported again.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`

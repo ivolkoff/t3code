@@ -1749,6 +1749,7 @@
   "181677cda4d3fd0a": "没有可添加项目的已连接环境",
   "3a0bf3d17f31584e": "在 {project} 中新建会话",
   "4b4b64cc95acb8da": "在以下位置新建会话…",
+  "d0f49124382e89f6": "Import CLI conversation into {project}",
   "3f581e98c86df72a": "不关联项目新建会话",
   "e510d9a7b684fbfe": "排查 issue",
   "cce3d80a2ddf1125": "由智能体排查 T3 Code 的问题并协助提交 issue",
@@ -1840,6 +1841,19 @@
       }
     },
     " 中新建会话"
+  ],
+  "7f14c5d5a7688c87": [
+    "Import CLI conversation into",
+    " ",
+    {
+      "t": "span",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    }
   ],
   "dbc0288da29ce1d4": "正在搜索消息…",
   "360702bf29668cf7": "正在加载文件夹…",
@@ -2153,6 +2167,12 @@
   "c65de112b48a66ed": "添加配对链接",
   "bc8ab792af1d656f": "在你的电脑上运行：",
   "0ba14e4e920cfa00": "或下载桌面应用",
+  "db08f95226af66e3": "Already in T3 Code",
+  "54e0d6b605fda1cf": "Continue a Claude Code, Codex or Pi conversation from {project} in T3 Code.",
+  "f331385f8cac1af0": "Continue a Claude Code, Codex or Pi conversation from this project in T3 Code.",
+  "ea6312740f4607a9": "Filter conversations",
+  "a6ebef3a2691939f": "Its T3 thread was deleted",
+  "e424aa04d80d8281": "Open",
   "0e79b7a6508a6286": "然后",
   "363b9991fa23d36b": [
     "如果已安装 ",
@@ -2425,6 +2445,7 @@
   "e54720cac68f2adb": "所有项目",
   "ac47f86df1c31a4a": "复制分支名失败",
   "4e6305459e784fea": "复制会话 ID 失败",
+  "117dc95ba8910385": "Import CLI conversation…",
   "5a79b7c910831c76": "会话标题不能为空",
   "5c14b37b13312503": "重命名会话失败",
   "fc97f746bdabe59f": "收尾会话失败",
@@ -7254,6 +7275,13 @@
   "a14d6b345367b538": "已导入",
   "cfcd9033ce52caea": "正在导入",
   "0ed7587d53e6ef4f": "导入",
+  "29913956244f5a36": "Import CLI conversation",
+  "07ddd60d9e1bccd6": "You need permission to run agents on this machine to import conversations.",
+  "40b678d13e92ec8e": "Finding conversations…",
+  "98eeb44dd1d970ec": "No Claude Code, Codex or Pi conversations found for this folder.",
+  "ef48507efdd40091": "No conversations match.",
+  "064eb99bc5c97759": "Showing the 200 most recent.",
+  "7833d281dd87a391": "Some conversations may be missing.",
   "eba6f410ffc4c9f8": "正在删除",
   "42963d4a5dbc5e5c": "删除",
   "006fab820cc5a2f1": "加载更多",

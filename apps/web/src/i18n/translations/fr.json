@@ -1749,6 +1749,7 @@
   "181677cda4d3fd0a": "Aucun environnement connecté ne peut ajouter de projet",
   "3a0bf3d17f31584e": "Nouveau fil dans {project}",
   "4b4b64cc95acb8da": "Nouveau fil dans...",
+  "d0f49124382e89f6": "Import CLI conversation into {project}",
   "3f581e98c86df72a": "Nouveau fil sans projet",
   "e510d9a7b684fbfe": "Trier un ticket",
   "cce3d80a2ddf1125": "Un agent examine un problème de T3 Code et vous aide à ouvrir un ticket",
@@ -1829,6 +1830,19 @@
   "1fe6afb5ec4534b7": "Configuration requise",
   "cd33738b793eb8a6": [
     "Nouveau fil dans",
+    " ",
+    {
+      "t": "span",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    }
+  ],
+  "7f14c5d5a7688c87": [
+    "Import CLI conversation into",
     " ",
     {
       "t": "span",
@@ -2149,6 +2163,12 @@
   "c65de112b48a66ed": "Ajouter un lien d’appairage",
   "bc8ab792af1d656f": "Exécutez sur votre ordinateur :",
   "0ba14e4e920cfa00": "Ou téléchargez l’app desktop",
+  "db08f95226af66e3": "Already in T3 Code",
+  "54e0d6b605fda1cf": "Continue a Claude Code, Codex or Pi conversation from {project} in T3 Code.",
+  "f331385f8cac1af0": "Continue a Claude Code, Codex or Pi conversation from this project in T3 Code.",
+  "ea6312740f4607a9": "Filter conversations",
+  "a6ebef3a2691939f": "Its T3 thread was deleted",
+  "e424aa04d80d8281": "Open",
   "0e79b7a6508a6286": "Puis",
   "363b9991fa23d36b": [
     "Ignorez l’installation si vous avez déjà ",
@@ -2421,6 +2441,7 @@
   "e54720cac68f2adb": "Tous les projets",
   "ac47f86df1c31a4a": "Échec de la copie de la branche",
   "4e6305459e784fea": "Échec de la copie de l’ID du fil",
+  "117dc95ba8910385": "Import CLI conversation…",
   "5a79b7c910831c76": "Le titre du fil ne peut pas être vide",
   "5c14b37b13312503": "Échec du renommage du fil",
   "fc97f746bdabe59f": "Échec de la clôture du fil",
@@ -7240,6 +7261,13 @@
   "a14d6b345367b538": "Importée",
   "cfcd9033ce52caea": "Import",
   "0ed7587d53e6ef4f": "Importer",
+  "29913956244f5a36": "Import CLI conversation",
+  "07ddd60d9e1bccd6": "You need permission to run agents on this machine to import conversations.",
+  "40b678d13e92ec8e": "Finding conversations…",
+  "98eeb44dd1d970ec": "No Claude Code, Codex or Pi conversations found for this folder.",
+  "ef48507efdd40091": "No conversations match.",
+  "064eb99bc5c97759": "Showing the 200 most recent.",
+  "7833d281dd87a391": "Some conversations may be missing.",
   "eba6f410ffc4c9f8": "Suppression",
   "42963d4a5dbc5e5c": "Supprimer",
   "006fab820cc5a2f1": "Charger plus",
