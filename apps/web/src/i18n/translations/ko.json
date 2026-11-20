@@ -3129,7 +3129,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "(이 페이지를 연 컴퓨터)"]
+      "c": [
+        " ",
+        "(이 페이지를 연 컴퓨터)"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3141,7 +3144,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· 실행하는 사람이 이 액세스 권한을 얻습니다"]
+      "c": [
+        " ",
+        "· 실행하는 사람이 이 액세스 권한을 얻습니다"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "방금 시작한 로그인만 승인하세요.",
@@ -11825,7 +11831,6 @@
   "2c3bb8ccf6c38078": "제공자 업데이트 알림 닫기",
   "3cef7762c22f5fb1": "제공자 상태가 바뀔 때까지 닫기",
   "0f90824868d6c3af": "새 스레드({shortcut})",
-  "a1dbe20d209982b6": "검색",
   "201317aac48d4d9f": "스레드 검색어 지우기",
   "bcda2ccaa871dc46": "현재 프로젝트에서 새 스레드: Shift+클릭({shortcut})",
   "aa5c379423baace1": "현재 프로젝트에서 새 스레드: Shift+클릭",
@@ -12301,5 +12306,77 @@
   "27d76249d09eb69f": "검토 가이드 준비됨",
   "faa3bb26abb39c93": "검토 가이드 실패",
   "b7df38b7d8792d78": "가이드 열기",
-  "9e91e9a77b664e4e": "검토 가이드를 시작할 수 없습니다"
+  "9e91e9a77b664e4e": "검토 가이드를 시작할 수 없습니다",
+  "dcddc1b32fdb01fe": "Tags are 64 characters at most.",
+  "fdea79029c2bcb5c": "Tags are one line of text.",
+  "2cfd3e1587867327": "Already tagged.",
+  "9407e149112dff61": "gray",
+  "b07bb5e64c3fe83c": "red",
+  "733bab81219f245b": "orange",
+  "42c0abc156ef1fb7": "amber",
+  "3c6a5e21e41a024a": "green",
+  "761c6b93bb30df2d": "teal",
+  "74cf9fb7bcc47196": "blue",
+  "c4824911528ab8e9": "violet",
+  "2a6ab0071136e5ac": "pink",
+  "3e6cd18e684f01cb": "Never paused when usage runs ahead of pace.",
+  "240938f7d18014ad": "Paused first when usage runs ahead of pace.",
+  "08053cb2146ac715": "Hidden from thread lists when the hidden thread tags setting lists it.",
+  "c3b3ac0738421584": "Edit tags",
+  "b7c6510bb5f00005": "Filter sidebar by tag…",
+  "ab5093cfaea3c0ae": "Tags",
+  "d51abb07364c29f7": "Clear tag filter",
+  "a301d160298d083e": "; tag: {tags}",
+  "56dd958e3b092f72": "Search projects and tags",
+  "44a4156e755a4dfe": "Search projects and tags...",
+  "edf045e61592c0ae": "No threads tagged {tags}",
+  "d828d52dc838f296": "No matching projects or tags.",
+  "fc05d4fb26dd6f1a": "Tags",
+  "31a898ef500e05aa": "{count, plural, one {{count} more tag} other {{count} more tags}}: {tags}",
+  "d39108f6db5e3279": "Search or create tag",
+  "9078f132cc8b258d": "Search or add tag",
+  "64ad0290dcb34802": "No tags yet.",
+  "2b44597a2df09020": [
+    "Create tag \"",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "\""
+  ],
+  "eb4d7b1a1c68822a": "Tags…",
+  "533b644a9b9b75a6": "Failed to add tag",
+  "3bbe7277cefef27f": "Failed to remove tag",
+  "ebee919b83e0c056": "Edit tags: {tags}",
+  "316112fe745d25ca": "Manage tags",
+  "781cd14003d11c5a": "Remove tag {tag}",
+  "4f986921066e83a9": "Edit tags",
+  "e02c73ff247468c3": "Manage tags",
+  "439560705826a50f": "No tags",
+  "7a527db6d16fa43a": "Enter a tag.",
+  "070e8d2523890f69": "{count, plural, one {{count} thread} other {{count} threads}}",
+  "0f3733ca20c407aa": "Could not rename tag",
+  "f3c1b6bbe429b8c2": "Could not delete tag",
+  "ee62b59761c42179": "Could not load tags",
+  "e305d3304a047429": "Loading tags…",
+  "0ae2e19f7a28cdb2": "No tags yet.",
+  "ea4d4e849f2653c0": "Color of “{tag}”",
+  "1594e7d829ef191f": "Move “{tag}” up",
+  "426ad444eaad0d16": "Move “{tag}” down",
+  "31e3e8d137ca1b40": "Show {count} more",
+  "83fd6c975d340138": "Rename “{tag}”",
+  "754f7251913b1457": "Changes {count, plural, one {{count} thread} other {{count} threads}}, archived ones included.",
+  "f54b3df7a592368a": "“{tag}” already exists, so the two tags merge.",
+  "f09aeeafd58b57d4": "New tag name",
+  "7f362f32c4659c0e": "Delete “{tag}”?",
+  "00ef38a77b5f21f6": "Remove “{tag}” from {count, plural, one {{count} thread} other {{count} threads}}, archived ones included? This can’t be undone.",
+  "9b20df3e21a3d401": "Rename",
+  "aba29e77e52bca46": "Delete",
+  "64eda13d28d2ec7c": "rename delete remove thread tags labels color order",
+  "b5538eccf2a0d277": "{count, plural, =1 {Tag} other {Tags}}",
+  "5dfcfacc082912a9": "Search threads, projects, tags",
+  "4c52a386284c1560": "Search threads, projects and tags",
+  "4d36b4ecb957f900": "Filter by project {name}",
+  "9dbea605c5b341c2": "Filter by tag {name}"
 }

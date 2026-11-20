@@ -193,6 +193,7 @@ export interface EnvironmentThreadShell {
   readonly limitRecovery?: import("@t3tools/contracts").OrchestrationV2LimitRecovery | null;
   readonly pinnedAt: string | null;
   readonly autoSettleDisabledAt?: string | null;
+  readonly tags?: ReadonlyArray<string>;
   /** `undefined` means the server predates the working-on line, so clients hide it. */
   readonly workingOn?: string | null;
   readonly workingOnDoneAt?: string | null;
@@ -354,6 +355,7 @@ export function presentThreadShell(
     limitRecovery: thread.limitRecovery ?? null,
     pinnedAt: nullableIso(thread.pinnedAt ?? null),
     autoSettleDisabledAt: nullableIso(thread.autoSettleDisabledAt ?? null),
+    ...(thread.tags === undefined ? {} : { tags: thread.tags }),
     ...(thread.workingOn === undefined
       ? {}
       : {

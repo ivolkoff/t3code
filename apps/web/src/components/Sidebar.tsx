@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useLocale, useMessages } from "gt-react";
 import { m } from "../i18n/messages";
 import { attachSidebarTree } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
@@ -11,6 +11,19 @@ import {
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
+import { openThreadTagPicker } from "../state/threadTagPicker";
+import { useSidebarTagFilter } from "../hooks/useSidebarTagFilter";
+import { SidebarTagFilterBar } from "./sidebar/SidebarTagFilter";
+import {
+  isSidebarTagFilterItem,
+  nextSidebarTagFilter,
+  sidebarTagFilterItems,
+  tagFilterIncludes,
+} from "./sidebar/SidebarTagFilter.logic";
+import {
+  collectThreadTags,
+  filterThreadsByTag,
+} from "@t3tools/client-runtime/state/threadTagFilter";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
@@ -60,6 +73,7 @@ import {
   AuthOrchestrationOperateScope,
   type ContextMenuSource,
   ProjectId,
+  threadTagKey,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -75,8 +89,10 @@ import {
   ListFilterIcon,
   PlusIcon,
   SettingsIcon,
+  TagIcon,
 } from "lucide-react";
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useReducer,
@@ -155,7 +171,8 @@ import {
   useQuietThreadShells,
 } from "../state/entities";
 import { environmentPresentations } from "../state/presentation";
-import { primaryServerKeybindingsAtom } from "../state/server";
+import { environmentIdsKey } from "../state/environmentAtomList";
+import { environmentHiddenThreadTagsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { environmentProjects } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
 import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/olderSettledShelf";
@@ -268,6 +285,7 @@ import {
 import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
 import {
   SidebarSearchResultRow,
+  SidebarSearchScopeRow,
   SortableThreadRow,
   type SidebarProviderEntry,
   type SidebarSweepAction,
@@ -434,6 +452,8 @@ function useSidebarThreads(input: {
   readonly folderGroups: readonly SidebarProjectSnapshot[] | null;
   // Keeps folders with no active threads, so a project the user filtered to or pinned can start one.
   readonly keepEmptyFolders: (group: SidebarProjectSnapshot) => boolean;
+  // Shells carry every tagged thread, so a tag filter lists them all and reads no older pages.
+  readonly tagFilterActive: boolean;
 }) {
   const {
     projectScopeKey,
@@ -446,6 +466,7 @@ function useSidebarThreads(input: {
     routeRowThreadKey,
     folderGroups,
     keepEmptyFolders: keepEmpty,
+    tagFilterActive,
   } = input;
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
@@ -503,12 +524,15 @@ function useSidebarThreads(input: {
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
     expanded: settledShelfExpanded,
-    visibleCount: settledVisibleCount,
+    visibleCount: tagFilterActive ? 0 : settledVisibleCount,
   });
-  const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
+  const listedSettledThreads = tagFilterActive
+    ? settledThreads
+    : settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
-  const settledCount =
-    settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
+  const settledCount = tagFilterActive
+    ? settledThreads.length
+    : settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
   const visibleSettledThreads = (() => {
     const visible = listedSettledThreads.slice(0, settledVisibleCount);
     if (
@@ -907,8 +931,11 @@ function readRouteThreadKey(router: AnyRouter): string | null {
   return ref === null ? null : scopedThreadKey(ref);
 }
 
+const NO_TAG_FILTER: ReadonlyArray<string> = [];
+
 export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReveal }) {
   const gt = useGT();
+  const locale = useLocale();
   const messages = useMessages();
   const {
     projects,
@@ -1111,7 +1138,23 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
   const threads = useQuietThreadShells();
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
-  const listedThreads =
+  const [savedTagFilter, setTagFilter] = useSidebarTagFilter();
+  // Kept while no server supports tags, so the filter returns when one connects.
+  const tagsSupported = [...serverConfigs.values()].some(
+    (config) => config.environment.capabilities.threadTags === true,
+  );
+  const hiddenTagKeysByEnvironment = useAtomValue(
+    environmentHiddenThreadTagsAtom(environmentIdsKey(connectedEnvironmentIds)),
+  ).map((tags) => new Set((tags ?? []).map(threadTagKey)));
+  // Dropped only when every server hides it; elsewhere the tag still filters its own threads.
+  const hiddenEverywhere = (tag: string) =>
+    hiddenTagKeysByEnvironment.length > 0 &&
+    hiddenTagKeysByEnvironment.every((keys) => keys.has(threadTagKey(tag)));
+  const tagFilter = tagsSupported
+    ? savedTagFilter.filter((tag) => !hiddenEverywhere(tag))
+    : NO_TAG_FILTER;
+  const knownTags = collectThreadTags(threads);
+  const launchingThreads =
     promotingDraftThreadKeys.length === 0
       ? threads
       : threads.map((thread) =>
@@ -1119,6 +1162,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ? asLaunchingThread(thread)
             : thread,
         );
+  const listedThreads = filterThreadsByTag(launchingThreads, tagFilter);
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -1185,12 +1229,33 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       ? null
       : (projectScopeItems.find((item) => item.value === (projectScopeKeys[0] ?? "all")) ??
         projectScopeItems[0]!);
+  const tagFilterItems = tagsSupported ? sidebarTagFilterItems(knownTags, tagFilter) : [];
+  const scopeFilterItems = [...projectScopeItems, ...tagFilterItems];
   const filteredProjectScopeItems = filterSidebarProjectScopeItems({
-    items: projectScopeItems,
+    items: scopeFilterItems,
     query: projectScopeMenuState.query,
     matches: (item, query) =>
       projectScopeFilter.contains(item, query, (candidate) => candidate.label),
   });
+  const pickScopeItem = (item: (typeof scopeFilterItems)[number], additive: boolean) => {
+    if (isSidebarTagFilterItem(item)) {
+      setTagFilter(nextSidebarTagFilter(tagFilter, item.tag, additive));
+    } else if (item.value === "all") {
+      setProjectScopeKeys([]);
+    } else if (additive) {
+      toggleProjectScopeKey(item.value);
+    } else {
+      setProjectScopeKeys([item.value]);
+    }
+  };
+  const searchScopeRows = isSearchingThreads
+    ? filterSidebarProjectScopeItems({
+        items: scopeFilterItems,
+        query: threadSearchQuery,
+        matches: (item, query) =>
+          projectScopeFilter.contains(item, query, (candidate) => candidate.label),
+      })
+    : [];
   const scopedProjectGroups = revealWidensScope ? [] : chosenProjectGroups;
   const scopedProjectRefs = scopedProjectGroups.flatMap((project) => project.memberProjectRefs);
   const scopedProjectKeys = revealWidensScope ? null : chosenScopeProjectKeys;
@@ -1358,6 +1423,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     threads: listedThreads,
     delegatedUnderParent,
     routeRowThreadKey,
+    tagFilterActive: tagFilter.length > 0,
     folderGroups: boringSidebarEnabled
       ? scopedProjectGroups.length === 0
         ? // An archived project keeps a folder for its active threads, below the rest.
@@ -1426,18 +1492,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
 
   // The highlight follows its thread, so rows that arrive late do not move
   // it under Enter; a new query starts at the top.
+  // Project and tag rows lead the results and share their highlight.
+  const searchRowKeys = [...searchScopeRows.map((row) => row.value), ...threadSearchResultKeys];
   const activeSearchResultIndex = Math.max(
     0,
-    searchHighlightKey === null ? 0 : threadSearchResultKeys.indexOf(searchHighlightKey),
+    searchHighlightKey === null ? 0 : searchRowKeys.indexOf(searchHighlightKey),
   );
   const setActiveSearchResultIndex = (index: number | ((index: number) => number)) =>
     setSearchHighlightKey(
-      threadSearchResultKeys[
-        typeof index === "function" ? index(activeSearchResultIndex) : index
-      ] ?? null,
+      searchRowKeys[typeof index === "function" ? index(activeSearchResultIndex) : index] ?? null,
     );
   const moveSearchHighlight = (step: 1 | -1) => {
-    const count = threadSearchResults.length;
+    const count = searchRowKeys.length;
     setActiveSearchResultIndex((activeSearchResultIndex + step + count) % count);
   };
 
@@ -1517,6 +1583,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     navigateToThread(ref);
     if (match) openThreadFindOnQuery(scopedThreadKey(ref), findForMessageMatch(match, query));
   };
+  const selectSearchScopeRow = (row: (typeof searchScopeRows)[number], additive: boolean) => {
+    clearThreadSearch();
+    pickScopeItem(row, additive);
+  };
   const handleThreadSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === "Escape" && isSearchingThreads) {
@@ -1525,7 +1595,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       clearThreadSearch();
       return;
     }
-    if (threadSearchResults.length === 0) return;
+    if (searchRowKeys.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       moveSearchHighlight(1);
@@ -1538,7 +1608,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      const result = threadSearchResults[activeSearchResultIndex];
+      const scopeRow = searchScopeRows[activeSearchResultIndex];
+      if (scopeRow) {
+        selectSearchScopeRow(scopeRow, event.shiftKey);
+        return;
+      }
+      const result = threadSearchResults[activeSearchResultIndex - searchScopeRows.length];
       if (result) selectThreadSearchResult(result);
     }
   };
@@ -2696,6 +2771,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 autoSettleOptOut: supportsAutoSettleOptOut,
                 snooze: configLoaded,
                 pinning: configLoaded,
+                threadTags:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities.threadTags ===
+                  true,
                 titleRegeneration: configLoaded,
               },
               snoozePresets,
@@ -2720,6 +2798,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           return;
         }
         switch (clicked.value) {
+          case "tags":
+            openThreadTagPicker(threadRef, position);
+            return;
           case "filter-by-project":
             if (threadProjectGroup) {
               setProjectScopeKeys(
@@ -3009,9 +3090,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
+              tagFilterBar={
+                <SidebarTagFilterBar active={tagFilter} onClear={() => setTagFilter([])} />
+              }
               projectScope={
                 <Combobox
-                  items={projectScopeItems}
+                  items={scopeFilterItems}
                   filteredItems={filteredProjectScopeItems}
                   autoHighlight
                   itemToStringLabel={(item) => item.label}
@@ -3032,24 +3116,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       return;
                     }
                     if (!item) return;
-                    if (item.value === "all") {
-                      setProjectScopeKeys([]);
-                    } else if (
-                      eventDetails.event instanceof MouseEvent &&
-                      eventDetails.event.shiftKey
-                    ) {
-                      // Canceling skips Base UI's commit, which would freeze the search query, and its close.
-                      eventDetails.cancel();
-                      toggleProjectScopeKey(item.value);
-                    } else {
-                      setProjectScopeKeys([item.value]);
-                    }
+                    const additive = isSidebarTagFilterItem(item)
+                      ? "shiftKey" in eventDetails.event && eventDetails.event.shiftKey === true
+                      : item.value !== "all" &&
+                        eventDetails.event instanceof MouseEvent &&
+                        eventDetails.event.shiftKey;
+                    // Canceling skips Base UI's commit, which would freeze the search query, and its close.
+                    if (additive) eventDetails.cancel();
+                    pickScopeItem(item, additive);
                   }}
                 >
                   <ComboboxTrigger
                     render={
                       <SidebarHeaderIconButton
-                        label={
+                        label={`${
                           scopedProjectGroups.length > 0
                             ? gt("Filter threads by project: {projects}", {
                                 projects: scopedProjectGroups
@@ -3057,7 +3137,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   .join(", "),
                               })
                             : gt("Filter threads by project")
-                        }
+                        }${
+                          tagFilter.length > 0
+                            ? gt("; tag: {tags}", { tags: tagFilter.join(", ") })
+                            : ""
+                        }`}
                       />
                     }
                   >
@@ -3080,6 +3164,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       <span className="flex shrink-0">
                         <ProjectFavicon project={scopedProjectGroups[0]} className="size-4" />
                       </span>
+                    ) : tagFilter.length > 0 ? (
+                      <TagIcon className="size-4" />
                     ) : (
                       <ListFilterIcon className="size-4" />
                     )}
@@ -3092,8 +3178,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     finalFocus={(closeType) => closeType === "keyboard"}
                   >
                     <ComboboxSearchInput
-                      aria-label={gt("Search projects")}
-                      placeholder={gt("Search projects...")}
+                      aria-label={
+                        tagFilterItems.length > 0
+                          ? gt("Search projects and tags")
+                          : gt("Search projects")
+                      }
+                      placeholder={
+                        tagFilterItems.length > 0
+                          ? gt("Search projects and tags...")
+                          : gt("Search projects...")
+                      }
                       value={projectScopeMenuState.query}
                       onKeyDown={(event) => {
                         if (
@@ -3118,6 +3212,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         }
                         if (event.ctrlKey || event.altKey || event.metaKey) return;
                         if (event.shiftKey && event.key === "Enter") {
+                          const tagItem = tagFilterItems.find((item) => item.value === scopeKey);
+                          if (tagItem) {
+                            event.preventDefault();
+                            setTagFilter(nextSidebarTagFilter(tagFilter, tagItem.tag, true));
+                            return;
+                          }
                           if (!project) return;
                           event.preventDefault();
                           toggleProjectScopeKey(project.projectKey);
@@ -3139,10 +3239,42 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       }
                     />
                     <ComboboxEmpty>
-                      <T>No matching projects.</T>
+                      {tagFilterItems.length > 0 ? (
+                        <T>No matching projects or tags.</T>
+                      ) : (
+                        <T>No matching projects.</T>
+                      )}
                     </ComboboxEmpty>
                     <ComboboxList aria-multiselectable>
-                      {(item: (typeof projectScopeItems)[number]) => {
+                      {(item: (typeof scopeFilterItems)[number], index: number) => {
+                        if (isSidebarTagFilterItem(item)) {
+                          const isSelected = tagFilterIncludes(tagFilter, item.tag);
+                          const previous = filteredProjectScopeItems[index - 1];
+                          return (
+                            <Fragment key={item.value}>
+                              {previous === undefined || !isSidebarTagFilterItem(previous) ? (
+                                <div
+                                  aria-hidden
+                                  className="px-2 pt-2 pb-1 font-medium text-muted-foreground text-xs"
+                                >
+                                  <T>Tags</T>
+                                </div>
+                              ) : null}
+                              <ComboboxItem
+                                hideIndicator
+                                value={item}
+                                aria-selected={isSelected}
+                                data-selected={undefined}
+                              >
+                                <ProjectScopeRowIcon isSelected={isSelected}>
+                                  <TagIcon className="size-4 shrink-0" />
+                                </ProjectScopeRowIcon>
+                                <span className="min-w-0 truncate text-sm">{item.label}</span>
+                                <span className="ml-auto size-7 shrink-0 sm:size-6" />
+                              </ComboboxItem>
+                            </Fragment>
+                          );
+                        }
                         const project = projectGroupByScopeKey.get(item.value) ?? null;
                         const isSelected = project
                           ? projectScopeKeys.includes(item.value)
@@ -3238,7 +3370,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               }}
               onSearchKeyDown={handleThreadSearchKeyDown}
               isSearching={isSearchingThreads}
-              searchResultCount={threadSearchResults.length}
+              searchResultCount={searchRowKeys.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
@@ -3247,7 +3379,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       >
         <SidebarGroup className="flex-1" role="presentation">
           {isSearchingThreads ? (
-            threadSearchResults.length > 0 ? (
+            searchRowKeys.length > 0 ? (
               <TooltipProvider
                 key="sidebar-thread-search-tooltips-150"
                 delay={150}
@@ -3268,7 +3400,32 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     aria-label={gt("Thread search results")}
                     className="flex flex-col gap-px"
                   >
-                    {threadSearchResults.map((thread, index) => {
+                    {searchScopeRows.map((row, index) => {
+                      const tagRow = isSidebarTagFilterItem(row);
+                      const project = tagRow ? null : projectGroupByScopeKey.get(row.value);
+                      return (
+                        <SidebarSearchScopeRow
+                          key={row.value}
+                          kind={tagRow ? "Tag" : "Project"}
+                          label={row.label}
+                          icon={
+                            project ? (
+                              <ProjectFavicon project={project} className="size-4 shrink-0" />
+                            ) : tagRow ? (
+                              <TagIcon className="size-4 shrink-0" />
+                            ) : (
+                              <FolderIcon className="size-4 shrink-0" />
+                            )
+                          }
+                          isHighlighted={activeSearchResultIndex === index}
+                          resultId={threadSearchResultId(index)}
+                          onHighlight={() => setActiveSearchResultIndex(index)}
+                          onSelect={(additive) => selectSearchScopeRow(row, additive)}
+                        />
+                      );
+                    })}
+                    {threadSearchResults.map((thread, threadIndex) => {
+                      const index = searchScopeRows.length + threadIndex;
                       const threadKey = scopedThreadKey(
                         scopeThreadRef(thread.environmentId, thread.id),
                       );
@@ -3377,6 +3534,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     <T>Show all projects</T>
                   </button>
                 </>
+              ) : tagFilter.length > 0 ? (
+                gt("No threads tagged {tags}", {
+                  tags: new Intl.ListFormat(locale, { type: "disjunction" }).format(tagFilter),
+                })
               ) : (
                 <T>No threads yet</T>
               )}

@@ -1,5 +1,6 @@
 import { useGT } from "gt-react-native";
 import { Pressable, ScrollView } from "react-native";
+import { threadTagKey } from "@t3tools/contracts";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { ListFilterMenu } from "../layout/workspace/ListFilterMenu";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -15,6 +16,9 @@ export function ThreadListFilters(props: {
   readonly selectedProjectKey: string | null;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
+  readonly tags: ReadonlyArray<string>;
+  readonly selectedTag: string | null;
+  readonly onTagChange: (tag: string | null) => void;
   /** List padding the scroller bleeds through so pills start where row content does. */
   readonly gutter: number;
 }) {
@@ -87,7 +91,28 @@ export function ThreadListFilters(props: {
           }
         }}
       />
-      {props.selectedEnvironmentId !== null || props.selectedProjectKey !== null ? (
+      {props.tags.length > 0 || props.selectedTag !== null ? (
+        <ListFilterMenu
+          label={props.selectedTag ?? gt("All tags")}
+          accessibilityLabel={gt("Filter threads by tag")}
+          active={props.selectedTag !== null}
+          actions={[
+            { id: "all", title: gt("All tags"), state: props.selectedTag === null ? "on" : "off" },
+            ...props.tags.map((tag) => ({
+              id: JSON.stringify(tag),
+              title: tag,
+              state:
+                props.selectedTag !== null && threadTagKey(tag) === threadTagKey(props.selectedTag)
+                  ? ("on" as const)
+                  : ("off" as const),
+            })),
+          ]}
+          onSelect={(id) => props.onTagChange(id === "all" ? null : (JSON.parse(id) as string))}
+        />
+      ) : null}
+      {props.selectedEnvironmentId !== null ||
+      props.selectedProjectKey !== null ||
+      props.selectedTag !== null ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={gt("Reset thread filters")}
@@ -95,6 +120,7 @@ export function ThreadListFilters(props: {
           onPress={() => {
             props.onEnvironmentChange(null);
             props.onProjectChange(null);
+            props.onTagChange(null);
           }}
         >
           <SymbolView name="xmark.circle.fill" size={18} tintColorClassName="accent-icon-muted" />

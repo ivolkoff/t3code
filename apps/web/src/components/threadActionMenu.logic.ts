@@ -20,6 +20,7 @@ export type ThreadActionMenuId =
   | "snooze"
   | `snooze:${string}`
   | "unsnooze"
+  | "tags"
   | "rename"
   | "regenerate-title"
   | "edit-working-on"
@@ -117,6 +118,7 @@ export interface ThreadActionMenuState {
     readonly autoSettleOptOut: boolean;
     readonly snooze: boolean;
     readonly pinning: boolean;
+    readonly threadTags?: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -203,12 +205,22 @@ export function buildThreadActionMenuItems(
               },
         ]
       : []),
+    ...(state.supports.threadTags
+      ? [
+          {
+            id: "tags" as const,
+            label: resolve(msg("Tags…")),
+            icon: "tag",
+            separatorBefore: true,
+          },
+        ]
+      : []),
     {
       id: "rename",
       label: resolve(msg("Rename thread")),
       icon: "pencil",
       disabled: state.canRename === false,
-      separatorBefore: true,
+      separatorBefore: !state.supports.threadTags,
     },
     ...(state.supports.titleRegeneration
       ? [
