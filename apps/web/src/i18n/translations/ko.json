@@ -2711,6 +2711,8 @@
   "d1259290b8c63577": "스레드 이름 바꾸기",
   "6dd1f458bcd6a2ea": "다시 생성하는 중…",
   "de30fdae5b3fea98": "제목 다시 생성",
+  "cafac459938c60a3": "Set working-on line…",
+  "d6d344e5549cecff": "Edit working-on line…",
   "dffd2e20f7ff5aa1": "읽지 않음으로 표시",
   "3364346f40934e88": "모든 프로젝트 표시",
   "666f3ac177c116b6": "{project}(으)로 필터",
@@ -3269,10 +3271,14 @@
   ],
   "3dbc42464b2bfb20": "이 ChatGPT 연결에서는 Fast와 Ultrafast를 사용할 수 없습니다. 계정에서 지원하는 속도 옵션을 사용하려면 기존 Codex CLI 로그인을 사용하세요.",
   "5c0eb4217bb673bd": "ChatGPT 요금제 사용 중",
+  "c939fede859900af": "Failed to update the working-on line",
   "3e545d70d0c3535c": "스레드 탐색 경로",
   "890c34762a621a66": "상위 스레드 열기: {title}",
   "7514746d2bd43a1c": "스레드 제목",
   "ab42a6d2ab6073d9": "{title} 스레드 작업",
+  "b07114447756f116": "Working on",
+  "be629766c57e5bf1": "What is this thread working on?",
+  "935b57bfb14de080": "Working on: {workingOn}",
   "cd8fd5a47060164b": [
     {
       "i": 1,
@@ -3280,6 +3286,14 @@
       "v": "v"
     },
     "에서 새 스레드"
+  ],
+  "1dbf3c8f8996e12b": [
+    "Working on: ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
   ],
   "1c983a010570cdbb": [
     "연결된 환경을 통해 ",
@@ -4797,6 +4811,7 @@
   "aa4fc5b9acda0f2e": "체크아웃을 전환했지만 스레드를 업데이트할 수 없습니다",
   "eb2cc2e7c234d4fd": "백그라운드 작업을 중지하지 못했습니다.",
   "a0aa3533b5a60cc4": "이 스레드를 더 이상 사용할 수 없습니다",
+  "83c3eb702145c456": "Failed to dismiss",
   "9abc8144c24eb42b": "다시 알림 설정됨, {remaining} 남음",
   "7df8fb644450d82e": "다시 알림 설정됨",
   "e4fb59de91f77e5e": "깨우는 중...",
@@ -4805,6 +4820,8 @@
   "46057a7aacae5167": "정리 취소하는 중...",
   "55c0728ebb0b05b1": "정리 취소",
   "fd4e45408394aac4": "다시 알림에서 깨어남",
+  "916e170d364571f9": "Task looks done",
+  "13e6f2309e418404": "Settle",
   "e7f9e31365849b9f": "이 제공자는 대화 기록 되돌리기를 지원하지 않습니다. 대신 새 스레드를 시작하세요.",
   "31db4cf2474ef2a6": "체크포인트를 되돌리기 전에 {environment}을(를) 다시 연결하세요.",
   "f7d2db726b3a9316": "체크포인트를 되돌리기 전에 현재 턴을 중단하세요.",

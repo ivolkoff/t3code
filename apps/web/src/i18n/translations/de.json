@@ -2713,6 +2713,8 @@
   "d1259290b8c63577": "Thread umbenennen",
   "6dd1f458bcd6a2ea": "Wird neu erzeugt…",
   "de30fdae5b3fea98": "Titel neu erzeugen",
+  "cafac459938c60a3": "Set working-on line…",
+  "d6d344e5549cecff": "Edit working-on line…",
   "dffd2e20f7ff5aa1": "Als ungelesen markieren",
   "3364346f40934e88": "Alle Projekte anzeigen",
   "666f3ac177c116b6": "Nach {project} filtern",
@@ -3272,12 +3274,24 @@
   ],
   "3dbc42464b2bfb20": "Fast und Ultrafast sind mit dieser ChatGPT-Verbindung nicht verfügbar. Verwende ein vorhandenes Codex-CLI-Login für die Geschwindigkeitsoptionen, die dein Konto unterstützt.",
   "5c0eb4217bb673bd": "ChatGPT-Abo wird verwendet",
+  "c939fede859900af": "Failed to update the working-on line",
   "3e545d70d0c3535c": "Thread-Pfad",
   "890c34762a621a66": "Übergeordneten Thread öffnen: {title}",
   "7514746d2bd43a1c": "Thread-Titel",
   "ab42a6d2ab6073d9": "Thread-Aktionen für {title}",
+  "b07114447756f116": "Working on",
+  "be629766c57e5bf1": "What is this thread working on?",
+  "935b57bfb14de080": "Working on: {workingOn}",
   "cd8fd5a47060164b": [
     "Neuer Thread in ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "1dbf3c8f8996e12b": [
+    "Working on: ",
     {
       "i": 1,
       "k": "_gt_value_1",
@@ -4813,6 +4827,7 @@
   "aa4fc5b9acda0f2e": "Checkout gewechselt, aber der Thread konnte nicht aktualisiert werden",
   "eb2cc2e7c234d4fd": "Hintergrundarbeit konnte nicht gestoppt werden.",
   "a0aa3533b5a60cc4": "Dieser Thread ist nicht mehr verfügbar",
+  "83c3eb702145c456": "Failed to dismiss",
   "9abc8144c24eb42b": "Zurückgestellt, noch {remaining}",
   "7df8fb644450d82e": "Zurückgestellt",
   "e4fb59de91f77e5e": "Wird geweckt...",
@@ -4821,6 +4836,8 @@
   "46057a7aacae5167": "Erledigt wird aufgehoben...",
   "55c0728ebb0b05b1": "Erledigt aufheben",
   "fd4e45408394aac4": "Aus dem Zurückstellen geweckt",
+  "916e170d364571f9": "Task looks done",
+  "13e6f2309e418404": "Settle",
   "e7f9e31365849b9f": "Dieser Anbieter unterstützt das Zurücksetzen des Gesprächsverlaufs nicht. Starte stattdessen einen neuen Thread.",
   "31db4cf2474ef2a6": "Verbinde {environment} neu, bevor du Checkpoints zurücksetzt.",
   "f7d2db726b3a9316": "Unterbrich die aktuelle Runde, bevor du Checkpoints zurücksetzt.",
