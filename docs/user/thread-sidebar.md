@@ -176,6 +176,44 @@ Pinned threads stay above the folders, and Snoozed and Settled stay below them. 
 can drag a thread onto the composer to mention it, but not within the sidebar, and the Working
 section is off. Each device keeps its own choice.
 
+## Tag threads
+
+Tags group threads that belong together across projects and states, such as `review`,
+`auth`, or `later`. A thread can carry several tags, and forks keep them.
+
+Open a thread's menu and choose **Tags…**. Check or uncheck as many tags as you like, or
+type to search and create a new one; press Esc or click away when done. On web and
+desktop, clicking a thread's tags in its header and **Edit tags** in the command palette
+open the same list. Tags ignore case, so `bug` and `Bug` are one tag, and a tag keeps the
+spelling it was first created with. Tags are up to 64 characters.
+
+To rename or delete a tag everywhere, open **Settings → Threads → Tags** on web and desktop, or
+**Settings → Tags** on mobile. Both change every thread on that machine, archived ones too, and
+renaming onto an existing tag merges the two.
+
+Three tags are always offered, even before any thread carries them: `critical`, `background`,
+and `private`. Besides those and the tags you placed in settings, the tag picker only suggests
+tags of threads that are not settled or archived. In the same settings page you can give each tag a color and move it up or down;
+tags show in that order everywhere, and tags you have not placed follow alphabetically. Order
+and colors are saved on the machine, so every device connected to it agrees.
+
+To show only tagged threads, pick a tag in the sidebar's filter menu, which lists tags
+below projects and searches both, or use **Filter sidebar by tag** in the command palette.
+On web and desktop, a click picks one tag; Shift+click adds or removes a tag and keeps the
+menu open. The sidebar shows threads with any of the picked tags, inside the picked
+projects. Typing a project or tag name in the sidebar search on web and desktop also lists
+it above matching threads; pick it to filter the same way. Clear the filter with its **×**
+button or **Clear tag filter**. On mobile, use the
+**Tag** option in the thread list's filter menu, and choose **All tags** to clear it.
+Each device remembers its own filter.
+
+Agents can tag their own thread or another one with `t3_thread_organize`, so you can
+ask an agent to "tag this thread `review`". Threads an agent starts can carry tags from
+the start, and scripts can tag threads with `t3 thread tag`.
+
+Tags need a server version with tag support. On older servers, the tag controls are
+hidden.
+
 ## Working-on line
 
 A thread can show one line naming the task it works on now, such as a ticket or bug. It

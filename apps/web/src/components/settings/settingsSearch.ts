@@ -75,6 +75,7 @@ export interface SettingsSearchItem {
   readonly textGeneratorsOnly?: boolean;
   readonly secondary?: boolean;
   readonly requiresThreadAutoSettlement?: boolean;
+  readonly threadTagManagementOnly?: boolean;
 }
 
 export interface SettingsSearchAvailability {
@@ -87,6 +88,7 @@ export interface SettingsSearchAvailability {
   readonly hasThreadAutoSettlement: boolean;
   readonly managedTunnelActive?: boolean;
   readonly hasPeerLinkHost?: boolean;
+  readonly hasThreadTagManagement?: boolean;
   readonly hasFastWorktreeCheckoutEnvironment?: boolean;
   /** An environment without a provider allow-list, which hides text generators. */
   readonly hasTextGeneratorsEnvironment?: boolean;
@@ -468,6 +470,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("snooze presets times later tonight tomorrow next week remind")],
     environmentOnly: true,
     scope: "environment-defaults",
+  },
+  {
+    id: "thread-tags",
+    title: "Tags",
+    to: "/settings/threads",
+    searchTerms: ["rename delete remove thread tags labels color order"],
+    environmentOnly: true,
+    threadTagManagementOnly: true,
+    scope: "environment",
   },
   {
     id: "snooze-limited-threads",
@@ -1677,6 +1688,7 @@ export function filterAvailableSettingsSearchItems(
       (!item.requiresThreadAutoSettlement || availability.hasThreadAutoSettlement) &&
       (!item.managedTunnelOnly || availability.managedTunnelActive === true) &&
       (!item.peerLinksOnly || availability.hasPeerLinkHost === true) &&
+      (!item.threadTagManagementOnly || availability.hasThreadTagManagement === true) &&
       (!item.fastWorktreeCheckoutOnly ||
         availability.hasFastWorktreeCheckoutEnvironment === true) &&
       (!item.textGeneratorsOnly || availability.hasTextGeneratorsEnvironment === true),

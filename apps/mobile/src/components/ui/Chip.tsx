@@ -20,6 +20,8 @@ export function Chip(props: {
   readonly size?: "small" | "default";
   readonly glass?: boolean;
   readonly colorScheme?: "light" | "dark";
+  /** Colors for an unselected, non-glass chip, such as a thread tag's palette pair. */
+  readonly tint?: { readonly background: string; readonly foreground: string };
   readonly onPress?: () => void;
   readonly accessibilityLabel?: string;
   readonly disabled?: boolean;
@@ -37,13 +39,14 @@ export function Chip(props: {
       ) : null}
       <AppText
         textRole={small ? "caption" : "footnote"}
-        numberOfLines={small ? undefined : 1}
+        numberOfLines={1}
         className={cn(
           "shrink",
           !small && "max-w-[180px]",
           !small && "font-t3-medium",
           props.selected ? "text-primary-foreground" : "text-foreground-muted",
         )}
+        style={props.tint && !props.selected ? { color: props.tint.foreground } : undefined}
       >
         {props.label}
       </AppText>
@@ -68,6 +71,9 @@ export function Chip(props: {
           layout,
           props.selected ? "bg-primary" : small ? "bg-grouped-card" : "bg-subtle",
         )}
+        style={
+          props.tint && !props.selected ? { backgroundColor: props.tint.background } : undefined
+        }
       >
         {content}
       </View>

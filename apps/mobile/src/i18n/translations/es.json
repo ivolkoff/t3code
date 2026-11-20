@@ -1265,6 +1265,7 @@
   "cc84bfe0ee5d0174": "Proyectos",
   "0bcc63fce8f612b5": "Teclado",
   "af4b7734da1d5ce7": "Voz",
+  "ab5093cfaea3c0ae": "Tags",
   "11d96d60bf9eda9b": "Chat",
   "2ab325baee3ec9a3": "Tareas programadas",
   "ca66dfd18b39496e": "Nueva tarea programada",
@@ -2263,6 +2264,8 @@
   "07641d43f54a7238": "Mostrar hilos de todos los entornos",
   "41bedaa76e442b60": "Proyecto",
   "9e1fa0f1aedaf566": "Mostrar hilos de todos los proyectos",
+  "6365cc5dfd58f234": "Tag",
+  "73c0239a7a5c5820": "All tags",
   "d6b75f6c2f576a2c": "Eliminar {title}",
   "5dcdca7407caa33b": "Eliminar",
   "fdbd74137dd62b6e": "¿Descartar borrador?",
@@ -3903,6 +3906,13 @@
   "4c2495d10dfbf72f": "cola",
   "4ebe2aa17b91e168": "redirigir",
   "48f04bb3132077ef": "mientras el agente trabaja",
+  "b5a302df4549f7aa": "tags",
+  "3aee58ca22da982a": "rename tag",
+  "048e8fd70d0cc1ba": "delete tag",
+  "ced27e9ba97d9923": "labels",
+  "d550d1e13789c496": "thread tags",
+  "12ad2b74eefebfd0": "tag color",
+  "0c14b7bf2d8f3389": "tag order",
   "ffb1ded95eb81974": "archivar",
   "3d5aeb06f2128b12": "archivados",
   "2a34f68d985e9fde": "restaurar",
@@ -4550,6 +4560,7 @@
   "dafcea6833ff1b2f": "{appName}, Hilos",
   "9e665ecb41862e2b": "Cargando hilos…",
   "792fd010fcd31023": "No se pudo buscar en los mensajes de los hilos",
+  "1304a8eb65dbea5f": "No threads tagged {tag}",
   "ad3d36993b64b932": "No hay hilos en {project}",
   "2e8ef6c4f106a92a": "{term, select, mr {Merge requests vinculadas} cr {Solicitudes de cambios vinculadas} other {Pull requests vinculadas}}",
   "dfc280cae289597e": "{open} abiertas · {linked} vinculadas",
@@ -4723,6 +4734,7 @@
   "39eb35d54cacd314": "Según los ajustes",
   "73c02fecfe6d6050": "Nunca",
   "7171d7551e7cd04e": "Renombrar",
+  "eb4d7b1a1c68822a": "Tags…",
   "dffd2e20f7ff5aa1": "Marcar como no leído",
   "1385e2d8bd696370": "Convertir en proyecto",
   "a1fcc064a5cece14": "Copiar hilo",
@@ -4799,6 +4811,7 @@
   "5caf3ae1d7016537": "Organizar",
   "67e93fad069186be": "mensajes en cola para enviar",
   "4a7db165528f9309": "regenerando título",
+  "c7be7dd1a73c4383": "tagged {tags}",
   "e7361a2ca81a2178": "Reordenar",
   "3659688609fb2010": "Quitar de resueltos",
   "0e4d162ff3844aab": "Cancelar posposición",
@@ -4936,14 +4949,13 @@
       "v": "v"
     }
   ],
-  "23d0be01844d163c": [
-    "Ritmo uniforme: debería quedar un ",
+  "0c01dc82abe8a727": [
+    "Even pace: ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    "% a estas alturas"
+    }
   ],
   "a6ae2f414eb6349a": [
     "Restaura un ",

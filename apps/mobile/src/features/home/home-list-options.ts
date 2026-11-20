@@ -12,6 +12,7 @@ import type { HomeProjectSortOrder } from "./homeThreadList";
 export interface HomeListOptions {
   readonly selectedEnvironmentId: EnvironmentId | null;
   readonly selectedProjectKey: string | null;
+  readonly selectedTag: string | null;
   readonly projectSortOrder: HomeProjectSortOrder;
 }
 
@@ -23,6 +24,7 @@ function defaultHomeListOptions(filters?: ThreadListFilters): HomeListOptions {
   return {
     selectedEnvironmentId: filters?.environmentId ?? null,
     selectedProjectKey: filters?.projectKey ?? null,
+    selectedTag: filters?.tag ?? null,
     projectSortOrder:
       DEFAULT_SIDEBAR_PROJECT_SORT_ORDER === "manual"
         ? "updated_at"
@@ -58,12 +60,14 @@ export function HomeListOptionsProvider({
     registry.set(optionsAtom, next);
     if (
       next.selectedEnvironmentId !== current.selectedEnvironmentId ||
-      next.selectedProjectKey !== current.selectedProjectKey
+      next.selectedProjectKey !== current.selectedProjectKey ||
+      next.selectedTag !== current.selectedTag
     ) {
       void savePreferences({
         threadListFilters: {
           environmentId: next.selectedEnvironmentId,
           projectKey: next.selectedProjectKey,
+          tag: next.selectedTag,
         },
       });
     }
@@ -72,7 +76,10 @@ export function HomeListOptionsProvider({
   return createElement(HomeListOptionsContext, { value }, children);
 }
 
-export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<EnvironmentId>) {
+export function useHomeListOptions(
+  availableEnvironmentIds: ReadonlySet<EnvironmentId>,
+  tagEnvironmentIds: ReadonlySet<EnvironmentId>,
+) {
   const shared = useContext(HomeListOptionsContext);
   const [localOptions, setLocalOptions] = useState<HomeListOptions>(defaultHomeListOptions);
   const options = shared?.options ?? localOptions;
@@ -84,10 +91,14 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
     availableEnvironmentIds.has(options.selectedEnvironmentId)
       ? options.selectedEnvironmentId
       : null;
+  // The saved tag waits, unchanged, for a server that supports tags.
+  const selectedTag = [...availableEnvironmentIds].some((id) => tagEnvironmentIds.has(id))
+    ? options.selectedTag
+    : null;
   const availableOptions =
-    selectedEnvironmentId === options.selectedEnvironmentId
+    selectedEnvironmentId === options.selectedEnvironmentId && selectedTag === options.selectedTag
       ? options
-      : { ...options, selectedEnvironmentId };
+      : { ...options, selectedEnvironmentId, selectedTag };
   const resolvedOptions: ResolvedHomeListOptions = {
     ...availableOptions,
     projectGroupingMode: shared?.projectGroupingMode ?? "repository",
@@ -99,6 +110,9 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
   const setSelectedProjectKey = (value: string | null) => {
     updateOptions({ selectedProjectKey: value });
   };
+  const setSelectedTag = (value: string | null) => {
+    updateOptions({ selectedTag: value });
+  };
   const setProjectSortOrder = (value: HomeProjectSortOrder) => {
     updateOptions({ projectSortOrder: value });
   };
@@ -106,6 +120,7 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
     options: resolvedOptions,
     setSelectedEnvironmentId,
     setSelectedProjectKey,
+    setSelectedTag,
     setProjectSortOrder,
   } as const;
 }

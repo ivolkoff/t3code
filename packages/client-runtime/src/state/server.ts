@@ -18,6 +18,7 @@ import {
   shouldRecommendDatabaseCompaction,
   type UsageSummary,
   WS_METHODS,
+  type ThreadTagStyle,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
@@ -100,6 +101,7 @@ export interface ServerUpdateTarget {
 }
 
 const IDLE_SERVER_UPDATE_STATE: ServerUpdateState = { status: "idle" };
+const NO_THREAD_TAG_STYLES: ReadonlyArray<ThreadTagStyle> = [];
 const EMPTY_SERVER_UPDATE_STATE_ATOM = Atom.make<ServerUpdateState>(IDLE_SERVER_UPDATE_STATE).pipe(
   Atom.withLabel("environment-data:server:update-state:empty"),
 );
@@ -1336,6 +1338,23 @@ export function createServerEnvironmentAtoms<R, E>(
       Atom.withLabel(`environment-data:server:hidden-thread-tags:${environmentId}`),
     ),
   );
+  const threadTagStylesAtom = Atom.family((environmentId: EnvironmentId) =>
+    Atom.make(
+      (get): ReadonlyArray<ThreadTagStyle> =>
+        get(settingsValueAtom(environmentId))?.threadTagStyles ?? NO_THREAD_TAG_STYLES,
+    ).pipe(
+      // Every settings push decodes a new array; keep equal lists stable for chip rows.
+      Atom.withEquality(
+        (a: ReadonlyArray<ThreadTagStyle>, b: ReadonlyArray<ThreadTagStyle>) =>
+          a === b ||
+          (a.length === b.length &&
+            a.every(
+              (style, index) => style.tag === b[index]?.tag && style.color === b[index]?.color,
+            )),
+      ),
+      Atom.withLabel(`environment-data:server:thread-tag-styles:${environmentId}`),
+    ),
+  );
   const usagePricesAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => {
       const overrides = get(settingsValueAtom(environmentId))?.usagePriceOverrides ?? {};
@@ -1464,6 +1483,7 @@ export function createServerEnvironmentAtoms<R, E>(
     updateStateAtom,
     settingsValueAtom,
     hiddenThreadTagsAtom,
+    threadTagStylesAtom,
     usageModelFilterAtom,
     providersValueAtom,
     providerAuthState: createEnvironmentRpcSubscriptionAtomFamily(runtime, {

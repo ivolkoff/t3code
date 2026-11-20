@@ -1265,6 +1265,7 @@
   "cc84bfe0ee5d0174": "Projekt",
   "0bcc63fce8f612b5": "Tangentbord",
   "af4b7734da1d5ce7": "Röst",
+  "ab5093cfaea3c0ae": "Tags",
   "11d96d60bf9eda9b": "Chatt",
   "2ab325baee3ec9a3": "Schemalagda uppgifter",
   "ca66dfd18b39496e": "Ny schemalagd uppgift",
@@ -2263,6 +2264,8 @@
   "07641d43f54a7238": "Visa trådar från alla miljöer",
   "41bedaa76e442b60": "Projekt",
   "9e1fa0f1aedaf566": "Visa trådar från alla projekt",
+  "6365cc5dfd58f234": "Tag",
+  "73c0239a7a5c5820": "All tags",
   "d6b75f6c2f576a2c": "Ta bort {title}",
   "5dcdca7407caa33b": "Ta bort",
   "fdbd74137dd62b6e": "Kasta utkastet?",
@@ -3909,6 +3912,13 @@
   "4c2495d10dfbf72f": "köa",
   "4ebe2aa17b91e168": "styr om",
   "48f04bb3132077ef": "medan agenten körs",
+  "b5a302df4549f7aa": "tags",
+  "3aee58ca22da982a": "rename tag",
+  "048e8fd70d0cc1ba": "delete tag",
+  "ced27e9ba97d9923": "labels",
+  "d550d1e13789c496": "thread tags",
+  "12ad2b74eefebfd0": "tag color",
+  "0c14b7bf2d8f3389": "tag order",
   "ffb1ded95eb81974": "arkivera",
   "3d5aeb06f2128b12": "arkiverade",
   "2a34f68d985e9fde": "återställ",
@@ -4557,6 +4567,7 @@
   "dafcea6833ff1b2f": "{appName}, trådar",
   "9e665ecb41862e2b": "Läser in trådar…",
   "792fd010fcd31023": "Kunde inte söka i trådmeddelanden",
+  "1304a8eb65dbea5f": "No threads tagged {tag}",
   "ad3d36993b64b932": "Inga trådar i {project}",
   "2e8ef6c4f106a92a": "{term, select, mr {Länkade merge requests} cr {Länkade ändringsbegäranden} other {Länkade pull requests}}",
   "dfc280cae289597e": "{open} öppna · {linked} länkade",
@@ -4730,6 +4741,7 @@
   "39eb35d54cacd314": "Följ inställningarna",
   "73c02fecfe6d6050": "Aldrig",
   "7171d7551e7cd04e": "Byt namn",
+  "eb4d7b1a1c68822a": "Tags…",
   "dffd2e20f7ff5aa1": "Markera som oläst",
   "1385e2d8bd696370": "Gör om till projekt",
   "a1fcc064a5cece14": "Kopiera tråd",
@@ -4806,6 +4818,7 @@
   "5caf3ae1d7016537": "Ordna",
   "67e93fad069186be": "meddelanden köade för att skickas",
   "4a7db165528f9309": "genererar om titeln",
+  "c7be7dd1a73c4383": "tagged {tags}",
   "e7361a2ca81a2178": "Ändra ordning",
   "3659688609fb2010": "Markera som ej klar",
   "0e4d162ff3844aab": "Avsluta snooze",
@@ -4942,14 +4955,13 @@
       "v": "v"
     }
   ],
-  "23d0be01844d163c": [
-    "Jämn takt: ",
+  "0c01dc82abe8a727": [
+    "Even pace: ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
-    },
-    " % kvar vid det här laget"
+    }
   ],
   "a6ae2f414eb6349a": [
     "Återställer ",

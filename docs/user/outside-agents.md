@@ -141,10 +141,11 @@ On the machine that runs the environment, `t3 thread` uses the same tools
 without a sign-in:
 
 ```sh
-id=$(t3 thread start . "Find why the tests are slow")
+id=$(t3 thread start . "Find why the tests are slow" --tag perf)
 t3 thread send "$id" "Now fix it" --wait
 t3 thread show "$id"
 t3 thread list
+t3 thread untag "$id" perf
 t3 thread working-on "$id" "Slow test suite"
 ```
 
@@ -152,7 +153,8 @@ t3 thread working-on "$id" "Slow test suite"
 its repository; a project id also works. A new thread uses the project's
 default model and permission mode, and runs in the project folder unless you
 pass `--worktree <base-branch>`. `send` never interrupts: a busy thread gets
-the message as its next turn. Pass `-` as the message to read it from stdin.
+the message as its next turn. Pass `-` as the message to read it from stdin. Repeat `--tag` to tag a new thread;
+`t3 thread tag` and `t3 thread untag` take a thread id and one or more tags.
 
 To choose the model, pass `--provider <instance-id> --model <slug>`. Add
 `--option id=value` for each model option, such as `--option effort=high`.

@@ -29,11 +29,13 @@ import { copyThreadReference } from "../lib/copyThreadReference";
 import { m } from "../i18n/messages";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import { threadEnvironment } from "../state/threads";
+import { openThreadTagPicker } from "../state/threadTagPicker";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope } from "../state/session";
 import {
   readEnvironmentServerConfigLoaded,
   readEnvironmentSupportsAutoSettleOptOut,
+  readEnvironmentSupportsThreadTags,
   readThreadShell,
   useProjects,
 } from "../state/entities";
@@ -136,6 +138,7 @@ export function useThreadActionMenu(input: {
         autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(threadRef.environmentId),
         snooze: configLoaded,
         pinning: configLoaded,
+        threadTags: readEnvironmentSupportsThreadTags(threadRef.environmentId),
         titleRegeneration: configLoaded,
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -257,6 +260,9 @@ export function useThreadActionMenu(input: {
           await reportFailure(m(msg("Failed to update auto-settle")), () =>
             setThreadAutoSettle(threadRef, action === "auto-settle:enabled"),
           );
+          return;
+        case "tags":
+          openThreadTagPicker(threadRef, position);
           return;
         case "rename":
           onStartRename();
