@@ -156,7 +156,9 @@ export function makeAntigravityAcpAdapterFlavor(
           options.makeRuntime({
             ...input,
             clientFileReads: true,
-            sessionSystemPromptAppend: PULL_REQUEST_LINKING_INSTRUCTIONS,
+            ...(input.runtimePolicy.pullRequestLinking === false
+              ? {}
+              : { sessionSystemPromptAppend: PULL_REQUEST_LINKING_INSTRUCTIONS }),
           }),
         )
         .pipe(Effect.provideService(Scope.Scope, scope));
