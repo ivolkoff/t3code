@@ -11,7 +11,7 @@ export function buildRuntimeInstructions(runtime: {
   readonly modelName?: string | undefined;
   readonly reasoningEffort?: string | undefined;
   /** False when the session's system prompt already carries the linking instructions. */
-  readonly pullRequestLinking?: boolean;
+  readonly pullRequestLinking?: boolean | undefined;
 }): string {
   const harness = toSingleLine(runtime.harness);
   const model = toSingleLine(runtime.model ?? "");

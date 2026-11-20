@@ -8,6 +8,7 @@ import {
   PI_T3_MCP_EXTENSION_SOURCE,
   T3_MCP_BEARER_ENV,
   T3_MCP_URL_ENV,
+  T3_PI_PULL_REQUEST_LINKING_ENV,
   T3_PI_RUNTIME_MODE_ENV,
   T3_PI_MCP_EXTENSION_PATH_ENV,
 } from "./mcpExtensionSource.ts";
@@ -259,6 +260,7 @@ export function buildPiRpcLaunch(input: {
   readonly disableExtensions?: boolean;
   readonly disableTools?: boolean;
   readonly runtimeMode?: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
+  readonly pullRequestLinking?: boolean | undefined;
 }): {
   readonly args: ReadonlyArray<string>;
   readonly env: NodeJS.ProcessEnv;
@@ -297,6 +299,7 @@ export function buildPiRpcLaunch(input: {
   delete environment[T3_MCP_URL_ENV];
   delete environment[T3_MCP_BEARER_ENV];
   delete environment[T3_PI_MCP_EXTENSION_PATH_ENV];
+  delete environment[T3_PI_PULL_REQUEST_LINKING_ENV];
 
   return {
     args,
@@ -310,6 +313,9 @@ export function buildPiRpcLaunch(input: {
             [T3_PI_RUNTIME_MODE_ENV]:
               input.runtimeMode === "auto" ? "approval-required" : input.runtimeMode,
           }
+        : {}),
+      ...(hasT3Extension && input.pullRequestLinking === false
+        ? { [T3_PI_PULL_REQUEST_LINKING_ENV]: "off" }
         : {}),
       ...(hasT3Mcp && input.mcpSession !== undefined
         ? {

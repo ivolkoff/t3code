@@ -8906,8 +8906,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             harness: flavor.runtimeHarness ?? driver,
             model: turnInput.modelSelection.model,
             pullRequestLinking:
-              sessionSetup === null ||
-              flavor.sessionCarriesPullRequestLinking?.(sessionSetup.initializeResult) !== true,
+              turnInput.runtimePolicy.pullRequestLinking !== false &&
+              (sessionSetup === null ||
+                flavor.sessionCarriesPullRequestLinking?.(sessionSetup.initializeResult) !== true),
           });
           // The agent keeps its own history, so resend only after compaction or when the text changes.
           const sendRuntimeInstructions =

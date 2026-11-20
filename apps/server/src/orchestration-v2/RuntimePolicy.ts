@@ -14,6 +14,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
+import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ServerSettings from "../serverSettings.ts";
@@ -151,6 +152,9 @@ export const layerFromProjectStore: Layer.Layer<
     // The same ceiling the orchestrator enforces, fixed for the server's life.
     const { managedPolicy } = yield* ServerSettings.ServerSettingsService;
     const maxRuntimeMode = managedPolicy?.limits?.maxRuntimeMode;
+    const repositoryIdentities = yield* Effect.serviceOption(
+      RepositoryIdentityResolver.RepositoryIdentityResolver,
+    );
     return RuntimePolicyV2.of({
       resolve: Effect.fn("RuntimePolicyV2.resolve")(function* (input) {
         yield* refuseAboveCeiling(managedPolicy, input.thread);
@@ -184,11 +188,16 @@ export const layerFromProjectStore: Layer.Layer<
               }),
             ),
           ));
+        // Linking can't succeed on a host with no known pull request URL shape; the instructions only buy failed calls.
+        const identity = Option.isSome(repositoryIdentities)
+          ? yield* repositoryIdentities.value.resolve(cwd)
+          : null;
         return ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
           runtimeMode: providerRuntimeMode(input.thread.runtimeMode, supportedRuntimeModes),
           interactionMode: input.thread.interactionMode,
           cwd,
           ...(maxRuntimeMode === undefined ? {} : { maxRuntimeMode }),
+          ...(identity?.provider === "unknown" ? { pullRequestLinking: false } : {}),
         });
       }),
     });
