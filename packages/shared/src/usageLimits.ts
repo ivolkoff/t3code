@@ -731,6 +731,29 @@ export function paceOf(window: ServerProviderUsageWindow, now: number): LimitPac
   return elapsed === null ? null : paceOfShares(window.usedPercent, elapsed);
 }
 
+/** When the even-pace line catches up with the latest window over `aheadPercent`, or null. */
+export function paceHoldUntil(
+  windows: ReadonlyArray<ServerProviderUsageWindow>,
+  now: number,
+  aheadPercent: number,
+  resumeSlackPercent: number,
+): number | null {
+  let wake: number | null = null;
+  for (const window of windows) {
+    const elapsed = elapsedShare(window, now);
+    const resetsAt = resetMillis(window);
+    if (elapsed === null || resetsAt === null || window.windowDurationMins === undefined) continue;
+    if (window.usedPercent - elapsed * 100 <= aheadPercent) continue;
+    const length = window.windowDurationMins * MINUTE;
+    const at = Math.min(
+      resetsAt,
+      resetsAt - length + (length * (window.usedPercent - resumeSlackPercent)) / 100,
+    );
+    if (at > now && (wake === null || at > wake)) wake = at;
+  }
+  return wake;
+}
+
 function paceOfShares(usedPercent: number, elapsed: number): LimitPace {
   const gap = usedPercent - elapsed * 100;
   if (gap > 5) return "ahead";

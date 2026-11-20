@@ -97,7 +97,10 @@ export function usageLimitRecoveryBannerItem(
       variant: "warning",
       group: "environment",
       icon: <GaugeIcon />,
-      title: resolve(msg("Usage limit reached")),
+      title:
+        errorCode === "pace_hold"
+          ? resolve(msg("Paused · ahead of usage pace"))
+          : resolve(msg("Usage limit reached")),
       description: resetDescription,
       actions: recoveryActions,
     };
