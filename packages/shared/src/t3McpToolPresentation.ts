@@ -86,6 +86,7 @@ export type T3McpToolSummaryAction =
   | "ci-rerun"
   | "browser"
   | "device"
+  | "terminal"
   | "html-preview"
   | "html-render"
   | "send-to-user";
@@ -396,6 +397,13 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   t3_thread_organize: tool(["Organize", "Organizing", "Organized", "a thread"], "thread-organize"),
   t3_thread_update: tool(["Update", "Updating", "Updated", "T3 thread metadata"], "thread-update"),
   t3_worktree_list: tool(["List", "Listing", "Listed", "workspace branches"], "worktree-list"),
+  terminal_list: tool(["List", "Listing", "Listed", "terminals"], "terminal"),
+  terminal_open: tool(["Open", "Opening", "Opened", "a terminal"], "terminal"),
+  terminal_send_text: tool(["Type", "Typing", "Typed", "in a terminal"], "terminal"),
+  terminal_send_keys: tool(["Press", "Pressing", "Pressed", "keys in a terminal"], "terminal"),
+  terminal_read: tool(["Read", "Reading", "Read", "a terminal"], "terminal"),
+  terminal_wait: tool(["Wait for", "Waiting for", "Waited for", "a terminal"], "terminal"),
+  terminal_close: tool(["Close", "Closing", "Closed", "a terminal"], "terminal"),
   t3_preview_list: tool(["List", "Listing", "Listed", "preview tabs"], "browser", "browser"),
   t3_preview_close: tool(["Close", "Closing", "Closed", "a preview tab"], "browser", "browser"),
   t3_environment_read: tool(
