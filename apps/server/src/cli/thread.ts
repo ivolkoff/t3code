@@ -1,4 +1,5 @@
 import {
+  OrchestrationV2DispatchCommandResult,
   OrchestratorMcpFailure,
   OrchestratorMcpThreadListResult,
   OrchestratorMcpThreadReadResult,
@@ -1025,13 +1026,38 @@ const threadWorkingOnCommand = Command.make("working-on", {
   ),
 );
 
+const threadDeleteCommand = Command.make("delete", {
+  ...projectLocationFlags,
+  thread: threadArgument,
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription("Delete a thread permanently. Refused while a turn runs."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const threadId = yield* decodeThreadId(flags.thread);
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.delete")(function* (tools) {
+          const deleted = yield* tools.call(
+            "t3_thread_organize",
+            { threadId, action: "delete" },
+            OrchestrationV2DispatchCommandResult,
+          );
+          yield* flags.json ? printJson(deleted) : Console.log("Deleted.");
+        }),
+      );
+    }).pipe(reportThreadErrors),
+  ),
+);
+
 export const threadCommand = Command.make("thread").pipe(
-  Command.withDescription("Start, message, and read threads on the running server."),
+  Command.withDescription("Start, message, read, and delete threads on the running server."),
   Command.withSubcommands([
     threadListCommand,
     threadStartCommand,
     threadSendCommand,
     threadShowCommand,
     threadWorkingOnCommand,
+    threadDeleteCommand,
   ]),
 );
