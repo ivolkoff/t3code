@@ -784,10 +784,18 @@ export function isUsageLimitsCommand(prompt: string): boolean {
 }
 
 export function hasProviderUsageLimits(
-  driver: ServerProvider["driver"],
+  instanceId: ProviderInstanceId,
   providers: readonly ServerProvider[],
   sources: UsageLimitSourceSnapshots,
 ): boolean {
+  const provider = providers.find((candidate) => candidate.instanceId === instanceId);
+  if (!provider) return false;
+  if (provider.usageLimitSourceInstanceId) {
+    return providersWithLimits(providers).some(
+      (candidate) => candidate.instanceId === provider.usageLimitSourceInstanceId,
+    );
+  }
+  const { driver } = provider;
   return (
     providersWithLimits(providers).some((provider) => provider.driver === driver) ||
     sources.some(
@@ -820,15 +828,20 @@ export function withUsageLimitsCommands(
   providers: readonly ServerProvider[],
   sources: UsageLimitSourceSnapshots,
 ): ServerProvider[] {
+  const withLimits = providersWithLimits(providers);
+  const supportedInstanceIds = new Set(withLimits.map((provider) => provider.instanceId));
   const supportedDrivers = new Set([
-    ...providersWithLimits(providers).map((provider) => provider.driver),
+    ...withLimits.map((provider) => provider.driver),
     ...sources.flatMap((source) => source.accounts.map((account) => account.driver)),
   ]);
   const unreadableSource = sources.some(
     (source) => source.error !== undefined && source.accounts.length === 0,
   );
   return providers.map((provider) => {
-    if (!unreadableSource && !supportedDrivers.has(provider.driver)) return provider;
+    const supported = provider.usageLimitSourceInstanceId
+      ? supportedInstanceIds.has(provider.usageLimitSourceInstanceId)
+      : unreadableSource || supportedDrivers.has(provider.driver);
+    if (!supported) return provider;
     const commands = (items: readonly ServerProviderSlashCommand[]) => [
       ...items.filter((command) => command.name !== USAGE_LIMITS_COMMAND.name),
       USAGE_LIMITS_COMMAND,
@@ -855,7 +868,29 @@ export function collectProviderUsageLimits(
   now: number,
 ): UsageLimitsReport | null {
   const selected = providers.find((provider) => provider.instanceId === instanceId);
-  if (!selected || !hasProviderUsageLimits(selected.driver, providers, sources)) return null;
+  if (!selected || !hasProviderUsageLimits(instanceId, providers, sources)) return null;
+  const linkedSource = selected.usageLimitSourceInstanceId;
+  if (linkedSource) {
+    const source = providersWithLimits(providers).find(
+      (provider) => provider.instanceId === linkedSource,
+    );
+    if (!source?.usageLimits) return null;
+    return {
+      createdAt: DateTime.formatIso(DateTime.makeUnsafe(now)),
+      accounts: [
+        {
+          id: source.instanceId,
+          instanceId: source.instanceId,
+          driver: source.driver,
+          label: source.displayName ?? source.instanceId,
+          ...(source.displayName ? { displayName: source.displayName } : {}),
+          ...(source.auth.label ? { plan: source.auth.label } : {}),
+          limits: source.usageLimits,
+        },
+      ],
+      notices: [],
+    };
+  }
   const resolveKey = accountKeyResolver([
     ...providers.filter((provider) => provider.enabled).map(nativeReport),
     ...sources.flatMap((source) => source.accounts),

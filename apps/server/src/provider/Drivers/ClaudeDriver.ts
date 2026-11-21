@@ -1,4 +1,4 @@
-import { ClaudeSettings, ProviderDriverKind } from "@t3tools/contracts";
+import { ClaudeSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import type * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
@@ -144,12 +144,20 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
         ? configDir
         : undefined,
     );
-    const stampIdentity = withInstanceIdentity({
+    const withIdentity = withInstanceIdentity({
       instanceId,
       driverKind: DRIVER_KIND,
       displayName,
       accentColor,
       continuationGroupKey,
+    });
+
+    const stampIdentity = (provider: Parameters<typeof withIdentity>[0]): ServerProvider => ({
+      ...withIdentity(provider),
+      ...(config.usageLimitSourceInstanceId === undefined ||
+      config.usageLimitSourceInstanceId === instanceId
+        ? {}
+        : { usageLimitSourceInstanceId: config.usageLimitSourceInstanceId }),
     });
 
     const scopedLimitNames = yield* makeClaudeScopedLimitNames;

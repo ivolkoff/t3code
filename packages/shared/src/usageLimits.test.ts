@@ -1649,6 +1649,30 @@ describe("/usage-limits", () => {
     ).toEqual(["workspace-a-fresh", "codex", "workspace-b"]);
   });
 
+  it("shows only the linked account's quota for a Claude gateway", () => {
+    const claude = provider({
+      instanceId: ProviderInstanceId.make("claude-gateway"),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      usageLimitSourceInstanceId: selected.instanceId,
+      usageLimits: limits,
+    });
+    const otherCodex = { ...selected, instanceId: ProviderInstanceId.make("other-codex") };
+    const providers = [claude, otherCodex, selected];
+
+    expect(
+      collectProviderUsageLimits(claude.instanceId, providers, sources, now)?.accounts.map(
+        (account) => account.instanceId,
+      ),
+    ).toEqual([selected.instanceId]);
+    expect(withUsageLimitsCommands(providers, sources)[0]?.slashCommands).toEqual([
+      expect.objectContaining({ name: "usage-limits" }),
+    ]);
+
+    const missingSource = [claude, otherCodex];
+    expect(collectProviderUsageLimits(claude.instanceId, missingSource, sources, now)).toBeNull();
+    expect(withUsageLimitsCommands(missingSource, sources)[0]?.slashCommands).toEqual([]);
+  });
+
   it("supports a source-only provider and keeps duplicates when the native probe failed", () => {
     expect(
       collectProviderUsageLimits(selected.instanceId, [provider({})], sources, now)?.accounts.map(
