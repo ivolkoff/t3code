@@ -859,6 +859,13 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    usageLimitSourceInstanceId: Schema.optionalKey(ProviderInstanceId).pipe(
+      Schema.annotateKey({
+        title: "Usage limit source",
+        description: "Provider instance ID for a shared quota when Claude uses a gateway.",
+        providerSettingsForm: { placeholder: "codex", clearWhenEmpty: "omit" },
+      }),
+    ),
     autoCompactWindow: TrimmedString.check(
       Schema.isPattern(CLAUDE_AUTO_COMPACT_WINDOW_PATTERN),
     ).pipe(
@@ -888,7 +895,14 @@ export const ClaudeSettings = makeProviderSettingsSchema(
     ),
   },
   {
-    order: ["binaryPath", "homePath", "autoCompactWindow", "idleCompaction", "launchArgs"],
+    order: [
+      "binaryPath",
+      "homePath",
+      "autoCompactWindow",
+      "idleCompaction",
+      "launchArgs",
+      "usageLimitSourceInstanceId",
+    ],
   },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;

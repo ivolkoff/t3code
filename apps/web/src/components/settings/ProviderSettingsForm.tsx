@@ -108,6 +108,11 @@ const PACKAGE_FIELD_TEXT: ReadonlyMap<string, string> = new Map([
   ["Shadow home path", msg("Shadow home path")],
   ["Launch arguments", msg("Launch arguments")],
   ["CLAUDE_CONFIG_DIR path", msg("CLAUDE_CONFIG_DIR path")],
+  ["Usage limit source", msg("Usage limit source")],
+  [
+    "Provider instance ID for a shared quota when Claude uses a gateway.",
+    msg("Provider instance ID for a shared quota when Claude uses a gateway."),
+  ],
   ["Auto-compact after", msg("Auto-compact after")],
   ["Compact idle threads", msg("Compact idle threads")],
   ["Sign-in method", msg("Sign-in method")],
