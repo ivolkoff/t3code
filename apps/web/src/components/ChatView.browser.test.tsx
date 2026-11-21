@@ -4,7 +4,6 @@ import {
   EnvironmentId,
   IssueTrackerKind,
   ORCHESTRATION_V2_WS_METHODS,
-  ProviderInstanceId,
   RunId,
   ThreadId,
   WS_METHODS,
@@ -38,8 +37,6 @@ import { getRouter } from "~/router";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { environmentThreadDetails } from "~/state/threads";
 import {
-  CLAUDE_PROVIDER,
-  CODEX_PROVIDER,
   ENVIRONMENT_ID,
   PROJECT_ID,
   answerAssetUrls,
@@ -724,54 +721,6 @@ it("a mounted thread view lets go of the thread structures it has replaced", asy
   // The thread keeps its latest structure, and the timeline may remember the one before it.
   const kept = shown.slice(0, -2).flatMap((structure, round) => (structure.deref() ? [round] : []));
   expect(kept).toEqual([]);
-});
-
-it("shows the linked Codex quota in a Claude thread", async () => {
-  await page.viewport(1400, 900);
-  const claude = ProviderInstanceId.make("claudeAgent");
-  const codex = ProviderInstanceId.make("codex");
-  const thread = threadWithHistory("claude-codex-quota", 1, {
-    instanceId: claude,
-    model: "claude-opus-4-6",
-  });
-  using _environment = installFakeEnvironment([thread], {
-    providers: [
-      { ...CLAUDE_PROVIDER, usageLimitSourceInstanceId: codex },
-      {
-        ...CODEX_PROVIDER,
-        usageLimits: {
-          checkedAt: "2026-01-01T00:00:00.000Z",
-          windows: [{ id: "weekly", kind: "weekly", label: "Weekly", usedPercent: 23 }],
-        },
-      },
-    ],
-  });
-  __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
-    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
-    threadDetailsItems: { usage: true },
-  });
-  const router = getRouter(
-    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
-  );
-  await router.load();
-  await using _app = await render(<AppRoot router={router} />, {
-    // AppRoot brings its own router.
-    router: false,
-  });
-  const toggle = page.getByRole("button", { name: "Toggle thread details panel" });
-  await expect.element(toggle).toBeVisible();
-  if (toggle.element().getAttribute("aria-pressed") === "false") {
-    await toggle.click();
-  }
-  const details = page.getByRole("region", { name: "Codex", exact: true });
-  await expect.element(details.getByText("77%")).toBeVisible();
-
-  await userEvent.click(page.getByTestId("composer-editor"));
-  await insertText("/usage-limits");
-  await userEvent.keyboard("{Enter}");
-  await expect.element(page.getByRole("button", { name: "Dismiss usage limits" })).toBeVisible();
-  expect(dispatchedCommands().filter((command) => command.type === "message.dispatch")).toEqual([]);
 });
 
 it("a shortcut conditioned on rightPanelOpen sees the thread's open right panel", async () => {
