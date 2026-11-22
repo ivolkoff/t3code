@@ -180,8 +180,8 @@ function LimitRow({
       ariaValue={gt("{left}% left", { left })}
       opensUsage
       tooltip={
-        <div className="flex w-max flex-col gap-1 whitespace-nowrap">
-          <span className="font-medium text-foreground">{window.label}</span>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+          <span className="col-span-2 font-medium text-foreground">{window.label}</span>
           <Row label={gt("Left", { $context: "remaining usage" })}>{left}%</Row>
           {window.resetsAt ? (
             <Row label={gt("Resets", { $context: "when the usage window resets" })}>
