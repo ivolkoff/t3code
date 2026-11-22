@@ -178,6 +178,10 @@ Until then it shows no limits. Readings are not kept across a server restart.
 API-key accounts may not report subscription limits. This also applies to Claude connections
 using a proxy through `ANTHROPIC_AUTH_TOKEN`.
 
+If the gateway uses an account already connected to T3 Code, set **Usage limit source** in that
+Claude instance's settings to the source provider instance ID. Thread details and `/usage-limits`
+show that account's quota. Update or clear the setting if the gateway switches accounts.
+
 ## Connect a CLIProxyAPI hub
 
 To see pooled accounts, open **Settings → Providers → Usage providers → Add hub**. Choose the

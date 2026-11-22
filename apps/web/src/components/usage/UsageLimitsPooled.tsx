@@ -127,10 +127,10 @@ function AccountName({
 
 export function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3">
+    <>
       <span className="text-muted-foreground">{label}</span>
       <span className="min-w-0 text-foreground tabular-nums">{children}</span>
-    </div>
+    </>
   );
 }
 
@@ -182,7 +182,7 @@ function SegmentPopover({
           />
         ) : null}
       </div>
-      <div className="flex flex-col gap-1 border-t border-border/60 pt-2.5">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-border/60 pt-2.5 wrap-anywhere">
         {account.plan ? (
           <Row label={gt("Plan", { $context: "subscription plan" })}>{account.plan}</Row>
         ) : null}
@@ -198,7 +198,7 @@ function SegmentPopover({
           </Row>
         ) : null}
       </div>
-      <div className="flex flex-col gap-1 border-t border-border/60 pt-2.5">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-border/60 pt-2.5 wrap-anywhere">
         <Row label={gt("Left", { $context: "remaining usage" })}>{remaining}%</Row>
         {window.resetsAt ? (
           <Row label={gt("Resets", { $context: "when the usage window resets" })}>

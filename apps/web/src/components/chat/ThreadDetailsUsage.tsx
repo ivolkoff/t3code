@@ -17,6 +17,7 @@ import { useGT, useLocale, useMessages } from "gt-react";
 import type { ReactNode } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { providerClients } from "../settings/providerDriverMeta";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { formatContextWindowTokens } from "../../lib/contextWindow";
@@ -50,19 +51,25 @@ export function ThreadDetailsUsage({
     providerInstanceId !== null
       ? collectProviderUsageLimits(providerInstanceId, providers, sources, now)
       : null;
-  // Only this instance's data: the report keeps one instance per login, and any other entry may be
-  // a different login or workspace, so fall back to the instance's own snapshot.
-  const limits =
-    report?.accounts.find((entry) => entry.instanceId === providerInstanceId)?.limits ??
-    providers.find((provider) => provider.instanceId === providerInstanceId)?.usageLimits;
+  const provider = providers.find((entry) => entry.instanceId === providerInstanceId);
+  const sourceId = provider?.usageLimitSourceInstanceId;
+  const account = report?.accounts.find(
+    (entry) => entry.instanceId === (sourceId ?? providerInstanceId),
+  );
+  // The report can deduplicate this account under another instance. Use the local snapshot only for a native provider.
+  const limits = account?.limits ?? (sourceId === undefined ? provider?.usageLimits : undefined);
   if (!limits) return null;
+  const sourceLabel =
+    sourceId && account
+      ? (account.displayName ?? providerClients.get(account.driver)?.label ?? account.label)
+      : null;
   const notice = limitsNotice(limits, m);
 
   return (
     <ThreadDetailsSection
       headingId="thread-details-usage-heading"
-      title={gt("Usage limits")}
-      showHeading={false}
+      title={sourceLabel ?? gt("Usage limits")}
+      showHeading={sourceLabel !== null}
     >
       <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
         {notice ? (
@@ -173,8 +180,8 @@ function LimitRow({
       ariaValue={gt("{left}% left", { left })}
       opensUsage
       tooltip={
-        <div className="flex w-max flex-col gap-1 whitespace-nowrap">
-          <span className="font-medium text-foreground">{window.label}</span>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+          <span className="col-span-2 font-medium text-foreground">{window.label}</span>
           <Row label={gt("Left", { $context: "remaining usage" })}>{left}%</Row>
           {window.resetsAt ? (
             <Row label={gt("Resets", { $context: "when the usage window resets" })}>
