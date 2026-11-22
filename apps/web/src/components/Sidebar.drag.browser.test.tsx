@@ -54,8 +54,9 @@ it("shows the titled preview inside and outside search results from a collapsed 
   const folder = page.getByRole("button", { name: /^render/ });
   await expect.element(folder).toHaveAttribute("aria-expanded", "true");
   // A removed row fades out as a clone without its test id, so match the live row only.
-  const secondRow = page.getByTestId("sidebar-row-folder").filter({ hasText: second.title });
+  const secondRow = page.getByTestId("sidebar-row-card").filter({ hasText: second.title });
   await expect.element(secondRow).toBeInTheDocument();
+  await expect.element(secondRow).not.toHaveTextContent("render");
   // The shift guard drops pointer presses on a row that appeared under 500ms ago; keys pass.
   folder.element().focus();
   await userEvent.keyboard("{Enter}");

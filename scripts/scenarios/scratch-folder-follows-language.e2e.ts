@@ -67,8 +67,9 @@ test(
     }, project);
 
     await t3.open("/settings/labs");
-    await screen.getByLabel("Boring sidebar (group by project)", { exact: true }).tap();
-    await screen.getByLabel("Two-line folder rows", { exact: true }).waitFor();
+    const grouping = screen.getByLabel("Boring sidebar (group by project)", { exact: true });
+    await grouping.tap();
+    await expect(grouping).toHaveAttribute("aria-checked", "true");
 
     await t3.open("/settings/general");
     const openFolder = screen.getByTestId("sidebar-project-folder");
