@@ -151,6 +151,16 @@ describe("resolveThreadDetailsLimits", () => {
       limits: source.usageLimits,
     });
     expect(resolveThreadDetailsLimits(instanceId, null, [linked], [], now)).toBeNull();
+    const failedSource = { ...source, usageLimits: unsupported };
+    expect(
+      resolveThreadDetailsLimits(
+        instanceId,
+        null,
+        [linked, failedSource],
+        [hub("Other account", [{ id: "other.json", limits: limitsAt(10) }])],
+        now,
+      ),
+    ).toEqual({ kind: "instance", limits: unsupported });
   });
 
   it("pools only the accounts the hub routes the model to, even of another driver", () => {

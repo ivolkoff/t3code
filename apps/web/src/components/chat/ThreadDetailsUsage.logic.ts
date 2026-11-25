@@ -43,7 +43,12 @@ export function resolveThreadDetailsLimits(
     (provider.usageLimitSourceInstanceId === undefined ? provider.usageLimits : undefined);
   if (!own) return null;
   const hubs = instanceHubs(provider, sources);
-  if (limitsNotice(own) === null || hubs.length === 0) return { kind: "instance", limits: own };
+  if (
+    provider.usageLimitSourceInstanceId !== undefined ||
+    limitsNotice(own) === null ||
+    hubs.length === 0
+  )
+    return { kind: "instance", limits: own };
   // An instance sent to a hub reads no limits of its own; its hub pools the accounts it spends.
   return hubPool(provider.driver, model, providers, hubs, now) ?? { kind: "instance", limits: own };
 }

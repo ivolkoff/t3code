@@ -2172,7 +2172,8 @@ const make = Effect.gen(function* () {
         if (threadHasTerminal(thread.id)) return keep("Open terminal");
         if (activeDescendant(thread)) return keep("A subagent or side chat is still active");
         if (thread.worktreePath !== null) {
-          const worktreePath = path.resolve(thread.worktreePath);
+          const taskFolder = yield* taskFolders.find(thread.worktreePath);
+          const worktreePath = path.resolve(taskFolder?.root ?? thread.worktreePath);
           const available = (target: string) =>
             fs.exists(target).pipe(Effect.orElseSucceed(() => null));
           const exists = yield* available(worktreePath);
@@ -2185,7 +2186,8 @@ const make = Effect.gen(function* () {
                 other.deletedAt === null &&
                 !deleted.has(other.id) &&
                 other.worktreePath !== null &&
-                pathKey(other.worktreePath) === pathKey(worktreePath),
+                (pathKey(other.worktreePath) === pathKey(worktreePath) ||
+                  (taskFolder !== null && inside(worktreePath, other.worktreePath))),
             );
             if (!shared) return keep("Worktree was kept");
           } else if ((yield* available(path.dirname(worktreePath))) !== true) {

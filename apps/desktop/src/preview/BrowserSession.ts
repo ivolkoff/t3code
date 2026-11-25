@@ -1006,19 +1006,24 @@ export const make = Effect.gen(function* BrowserSessionMake() {
               // Navigations take the session User-Agent, which carries no Client Hints.
               if (
                 userAgentMetadata !== null &&
-                url.startsWith("https://") &&
+                isPotentiallyTrustworthy(url) &&
                 headerName("sec-ch-ua") === undefined
               ) {
-                Object.assign(headers, clientHintHeaders(userAgentMetadata));
+                for (const [name, value] of Object.entries(clientHintHeaders(userAgentMetadata))) {
+                  headers[headerName(name) ?? name] = value;
+                }
                 changed = true;
               }
               if (
                 userAgentMetadata === null &&
+                !userAgentOverride &&
                 (resourceType === "mainFrame" || resourceType === "subFrame") &&
                 headerName("sec-ch-ua") === undefined &&
                 isPotentiallyTrustworthy(url)
               ) {
-                Object.assign(headers, clientHints);
+                for (const [name, value] of Object.entries(clientHints)) {
+                  headers[headerName(name) ?? name] = value;
+                }
                 changed = true;
               }
               // Electron adds no Client Hints to navigations, and the guest's emulation reaches only its own requests.
@@ -1026,7 +1031,7 @@ export const make = Effect.gen(function* BrowserSessionMake() {
                 webContentsId === undefined ? undefined : deviceEmulations.get(webContentsId);
               if (device !== undefined) {
                 headers[headerName("user-agent") ?? "User-Agent"] = device.userAgent;
-                if (url.startsWith("https://")) {
+                if (isPotentiallyTrustworthy(url)) {
                   for (const [name, value] of Object.entries(clientHintHeaders(device.metadata))) {
                     headers[headerName(name) ?? name] = value;
                   }

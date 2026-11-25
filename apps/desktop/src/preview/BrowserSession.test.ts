@@ -1163,14 +1163,22 @@ describe("BrowserSession", () => {
       assert.deepStrictEqual(send("http://example.com/", { Accept: "*/*" }), {});
 
       yield* browserSessions.emulateDevice(42, "iphone-14-pro-max");
-      const emulated = send(
-        "https://example.com/",
-        { "User-Agent": "desktop", "Sec-CH-UA-Mobile": "?0" },
-        42,
-      )?.requestHeaders;
-      assert.include(emulated?.["User-Agent"], "iPhone");
-      assert.strictEqual(emulated?.["Sec-CH-UA-Mobile"], "?1");
-      assert.strictEqual(emulated?.["sec-ch-ua-platform"], '"iOS"');
+      for (const url of ["https://example.com/", "http://localhost:3000/"]) {
+        const emulated = send(
+          url,
+          { "User-Agent": "desktop", "Sec-CH-UA-Mobile": "?0" },
+          42,
+        )?.requestHeaders;
+        assert.include(emulated?.["User-Agent"], "iPhone");
+        assert.strictEqual(emulated?.["Sec-CH-UA-Mobile"], "?1");
+        assert.deepStrictEqual(
+          Object.entries(emulated ?? {})
+            .filter(([name]) => name.toLowerCase() === "sec-ch-ua-mobile")
+            .map(([, value]) => value),
+          ["?1"],
+        );
+        assert.strictEqual(emulated?.["sec-ch-ua-platform"], '"iOS"');
+      }
       assert.deepStrictEqual(send("https://example.com/", { "Sec-CH-UA": "kept" }, 7), {});
       assert.isUndefined(yield* browserSessions.documentDevice(42));
       send("https://example.com/page", {}, 42, "mainFrame");
@@ -1182,6 +1190,14 @@ describe("BrowserSession", () => {
       assert.deepStrictEqual(send("https://example.com/", { "Sec-CH-UA": "kept" }, 42), {});
       send("https://example.com/next", {}, 42, "mainFrame");
       assert.strictEqual((yield* browserSessions.documentDevice(42))?.presetId, null);
+      yield* browserSessions.setUserAgent({
+        browserUserAgentPreset: "custom",
+        browserUserAgent: "Custom browser",
+      });
+      assert.deepStrictEqual(
+        send("https://example.com/", { "User-Agent": "Custom browser" }, 7, "mainFrame"),
+        {},
+      );
     }).pipe(
       Effect.provide(layerChrome),
       Effect.ensuring(

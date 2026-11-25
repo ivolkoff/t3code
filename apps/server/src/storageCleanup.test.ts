@@ -4648,6 +4648,53 @@ describe("settled thread archive and deletion", () => {
     ),
   );
 
+  it.live("keeps a task folder's archived thread until its last checkout is removed", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const fixture = yield* settledFixture();
+        const sibling = yield* fixture.fs.makeTempDirectoryScoped({ prefix: "cleanup-sibling-" });
+        yield* fixture.command(fixture.repo, ["clone", "--local", fixture.repo, sibling]);
+        const context = yield* Layer.build(
+          layerTaskFoldersWithGit({
+            workspaceRoot: fixture.repo,
+            trackedFolders: [{ name: "app", path: sibling }],
+            thread: null,
+          }).pipe(Layer.provide(NodeCrypto.layer)),
+        );
+        const taskFolders = Context.get(context, TaskFolders.TaskFolders);
+        const plan = yield* taskFolders.plan({ projectId: ProjectId.make("project-1") });
+        const { taskFolder } = yield* taskFolders.create({
+          plan: plan!,
+          branch: "task",
+          projectStart: { refName: "main", baseRefName: "main" },
+          startFromOrigin: false,
+          projectCommands: "permitted",
+        });
+        fixture.setTaskFolders(taskFolders);
+        const thread = archivedThread({ branch: "task", worktreePath: taskFolder.projectPath });
+        fixture.setThreads([thread]);
+        const checkout = taskFolder.repositories[0]!.worktreePath;
+        yield* fixture.fs.writeFileString(`${checkout}/tracked.txt`, "uncommitted\n");
+
+        const kept = yield* fixture.service.runNow;
+        expect(yield* fixture.fs.exists(taskFolder.projectPath)).toBe(false);
+        expect(yield* fixture.fs.exists(taskFolder.root)).toBe(true);
+        expect(fixture.dispatched()).toEqual([]);
+        expect(threadEntries(kept)).toEqual([
+          expect.objectContaining({ outcome: "kept", reason: "Worktree was kept" }),
+        ]);
+
+        yield* fixture.command(checkout, ["checkout", "--", "tracked.txt"]);
+        const removed = yield* fixture.service.runNow;
+        expect(yield* fixture.fs.exists(taskFolder.root)).toBe(false);
+        expect(fixture.dispatched()).toEqual([
+          expect.objectContaining({ type: "thread.delete", threadId: thread.id }),
+        ]);
+        expect(threadEntries(removed)).toEqual([expect.objectContaining({ outcome: "removed" })]);
+      }),
+    ),
+  );
+
   it.effect("deletes a due thread after removing its clean worktree", () =>
     runCleanupTest(
       Effect.gen(function* () {
