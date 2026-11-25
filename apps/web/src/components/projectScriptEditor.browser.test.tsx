@@ -3,6 +3,7 @@ import { EnvironmentId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { page, userEvent } from "vite-plus/test/browser";
 
 vi.mock(import("~/state/session"), async (original) => ({
   ...(await original()),
@@ -106,5 +107,56 @@ describe("ScriptIcon", () => {
     expect(
       document.querySelector('[data-testid="unknown"] svg.lucide-flask-conical'),
     ).not.toBeNull();
+  });
+});
+
+describe("project action editor dismissal", () => {
+  it("stays open when the user clicks outside the editor", async () => {
+    setup();
+    await using screen = await render(null);
+    await open(screen, { scriptId: null, initial: EMPTY_PROJECT_SCRIPT_INPUT });
+    await expect.element(page.getByRole("dialog")).toBeVisible();
+
+    await userEvent.click(document.body, { position: { x: 1, y: 1 } });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("project action editor keybinding capture", () => {
+  it("captures modified shortcuts, ignores IME composition, and lets bare Escape close", async () => {
+    setup();
+    await using screen = await render(null);
+    await open(screen, { scriptId: null, initial: EMPTY_PROJECT_SCRIPT_INPUT });
+    await expect.element(page.getByRole("dialog")).toBeVisible();
+
+    const field = page.getByLabelText("Keybinding");
+    await expect.element(field).toHaveAttribute("data-keybinding-capture", "");
+    await field.click();
+    await expect.element(field).toHaveFocus();
+
+    await userEvent.keyboard("{Shift>}{Escape}{/Shift}");
+    await expect.element(field).toHaveValue("shift+esc");
+    expect(onClose).not.toHaveBeenCalled();
+
+    for (const composition of [
+      { key: "a", isComposing: true },
+      { key: "a", isComposing: false, keyCode: 229 },
+    ]) {
+      const keydown = new KeyboardEvent("keydown", {
+        ...composition,
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(() => {
+        field.element().dispatchEvent(keydown);
+      });
+      expect(keydown.defaultPrevented).toBe(false);
+      await expect.element(field).toHaveValue("shift+esc");
+    }
+
+    await userEvent.keyboard("{Escape}");
+    await expect.element(field).toHaveValue("shift+esc");
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

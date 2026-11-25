@@ -59,7 +59,7 @@ export const watchShellReadiness = Effect.fn("ProjectSetupScriptRunner.watchShel
         const seen = activity;
         yield* Effect.sleep(SHELL_QUIET_FALLBACK);
         if (activity !== seen) continue;
-        if (!busy) return "ready" as const;
+        if (!busy) return "quiet" as const;
         yield* input.onStartupPrompt;
       }
     });
