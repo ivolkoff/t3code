@@ -646,6 +646,7 @@ describe("MessagesTimeline messages", () => {
     const target = page.getByText(paragraphs[15]!.trim(), { exact: true }).element();
     await vi.waitFor(() => {
       expect(viewport.scrollHeight).toBeGreaterThan(1000);
+      expect(target.checkVisibility({ opacityProperty: true })).toBe(true);
       expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2);
     });
     await props.listRef.current!.scrollToOffset({
