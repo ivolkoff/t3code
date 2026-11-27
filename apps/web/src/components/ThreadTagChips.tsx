@@ -10,7 +10,7 @@ import type { CSSProperties } from "react";
 
 import { serverEnvironment } from "../state/server";
 import { Badge } from "./ui/badge";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 const MAX_CHIPS = 2;
 
@@ -51,18 +51,23 @@ export function ThreadTagChips(props: {
         </Badge>
       ))}
       {hidden.length > 0 ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={<Badge variant="outline" size="sm" className="shrink-0" />}
-            aria-label={gt(
-              "{count, plural, one {{count} more tag} other {{count} more tags}}: {tags}",
-              { count: hidden.length, tags: hidden.join(", ") },
-            )}
-          >
-            +{hidden.length}
-          </TooltipTrigger>
-          <TooltipPopup side="top">{hidden.join(", ")}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          side="top"
+          label={hidden.join(", ")}
+          render={
+            <Badge
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              aria-label={gt(
+                "{count, plural, one {{count} more tag} other {{count} more tags}}: {tags}",
+                { count: hidden.length, tags: hidden.join(", ") },
+              )}
+            />
+          }
+        >
+          +{hidden.length}
+        </SharedTooltipTrigger>
       ) : null}
     </span>
   );

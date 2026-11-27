@@ -70,31 +70,35 @@ export function LucideIconSearch({
           setQuery("");
         }}
       />
-      <ScrollArea scrollFade className="max-h-64">
-        <div className="grid grid-cols-8 gap-1 p-0.5 sm:grid-cols-10">
-          {icons.map((name) => (
-            <button
-              key={name}
-              type="button"
-              aria-label={iconLabel(name)}
-              aria-pressed={selected === name}
-              className={cn(
-                "flex aspect-square items-center justify-center rounded-md border border-transparent outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                selected === name && "border-border bg-accent",
-                iconClassName,
-              )}
-              onClick={() => onSelect(name)}
-            >
-              <PickerIcon name={name} />
-            </button>
-          ))}
-        </div>
-      </ScrollArea>
-      {icons.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          <T>No icons found.</T>
-        </p>
-      ) : null}
+      {/* ScrollArea's size-full needs a fixed-height parent to keep the centered dialog still. */}
+      <div className="h-64">
+        <ScrollArea scrollFade>
+          {icons.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              <T>No icons found.</T>
+            </p>
+          ) : (
+            <div className="grid grid-cols-8 gap-1 p-0.5 sm:grid-cols-10">
+              {icons.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  aria-label={iconLabel(name)}
+                  aria-pressed={selected === name}
+                  className={cn(
+                    "flex aspect-square items-center justify-center rounded-md border border-transparent outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                    selected === name && "border-border bg-accent",
+                    iconClassName,
+                  )}
+                  onClick={() => onSelect(name)}
+                >
+                  <PickerIcon name={name} />
+                </button>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
     </>
   );
 }
